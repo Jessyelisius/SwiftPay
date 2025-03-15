@@ -28,6 +28,10 @@ const UserModel = new mongoose.Schema(
       type: String,
       required: true,
     },
+    EmailVerif: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
