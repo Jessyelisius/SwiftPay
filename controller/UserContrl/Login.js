@@ -30,9 +30,16 @@ const Login = async (req, res) => {
 
     res
       .status(200)
-      .json({ Error: false, Message: "login successful", Result: token });
+      .json({
+        Error: false,
+        Message: "login successful",
+        Result: token,
+        User: user,
+      });
   } catch (error) {
     console.log("error loging in user", error.Message);
     res.status(400).json({ Error: true, Message: "fatal error" });
   }
 };
+
+module.exports = Login;
