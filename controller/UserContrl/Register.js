@@ -40,7 +40,7 @@ const Registration = async (req, res) => {
     if (existingUser)
       return res
         .status(400)
-        .json({ Error: true, Message: "User Exist; Email already in use" });
+        .json({ Error: true, Message: "User exist, pls login" });
 
     const hashpwd = bcrypt.hashSync(Input.Password, 10);
     const user = await userModel.create({
