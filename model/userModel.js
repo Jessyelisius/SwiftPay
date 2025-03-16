@@ -32,6 +32,9 @@ const UserModel = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    EmailToken: {
+      type: String, //for email verification link
+    },
   },
   { timestamps: true }
 );

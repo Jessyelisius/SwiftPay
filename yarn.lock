@@ -704,6 +704,11 @@ qs@6.13.0:
   dependencies:
     side-channel "^1.0.6"
 
+rand-token@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/rand-token/-/rand-token-1.0.1.tgz#a47fdfd94894cc349d74234403c4b24624733c58"
+  integrity sha512-Zri5SfJmEzBJ3IexFdigvPSCamslJ7UjLkUn0tlgH7COJvaUr5V7FyUYgKifEMTw7gFO8ZLcWjcU+kq8akipzg==
+
 random-bytes@~1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/random-bytes/-/random-bytes-1.0.0.tgz#4f68a1dc0ae58bd3fb95848c30324db75d64360b"

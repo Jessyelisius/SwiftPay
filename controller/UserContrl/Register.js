@@ -1,5 +1,7 @@
 const userModel = require("../../model/userModel");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { generateLink, Sendmail } = require("../../utils/mailer.util");
 
 const Registration = async (req, res) => {
   // Email regex pattern for basic email validation
@@ -43,22 +45,147 @@ const Registration = async (req, res) => {
         .json({ Error: true, Message: "User exist, pls login" });
 
     const hashpwd = bcrypt.hashSync(Input.Password, 10);
+
+    //generate Email verifcation token
+    const emailToken = jwt.sign(
+      {
+        Email,
+      },
+      process.env.jwt_secret_token,
+      { expiresIn: "1hr" }
+    );
+
     const user = await userModel.create({
       FirstName: Input.FirstName,
       LastName: Input.LastName,
       Email: Input.Email,
       Password: hashpwd,
       Phone: Input.Phone,
-      EmailVerif: false,
+      EmailToken: emailToken, ///to store the token
+      EmailVerif: false, //mark as unverified
     });
 
-    res
-      .status(200)
-      .json({ Error: false, Message: "User created", Result: user });
+    //send email verification token
+    const verifyLink = generateLink();
+    await Sendmail(
+      Email,
+      "Verify Your Email",
+      `
+      <!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f6f6f6;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 30px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            text-align: center;
+        }
+        .header {
+            font-size: 24px;
+            font-weight: bold;
+            color: #d4af37;
+        }
+        .message {
+            font-size: 16px;
+            color: #333333;
+            margin: 20px 0;
+        }
+        .verify-button {
+            display: inline-block;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #ffffff;
+            background-color: #d4af37;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s ease-in-out;
+        }
+        .verify-button:hover {
+            background-color: #b5932d;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777777;
+        }
+        .footer a {
+            color: #d4af37;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">Verify Your Email</div>
+    <p class="message">Hi <b>${FirstName}</b>,</p>
+    <p class="message">
+        Thank you for signing up! Please verify your email address to activate your account.
+    </p>
+    <a href="${verifyLink}" class="verify-button">Verify My Email</a>
+    <p class="message">If you did not sign up for this account, you can safely ignore this email.</p>
+    <div class="footer">
+        &copy; 2025 SwiftPay. All rights reserved. <br>
+        Need help? <a href="mailto:support@jessy-codes.com.ng">Contact Support</a>
+    </div>
+</div>
+
+</body>
+</html>
+
+      `
+    );
+    res.status(200).json({
+      Error: false,
+      Message: "Verification email sent. Please verify before login.",
+      Result: user,
+    });
   } catch (error) {
     console.log("error creating user", error);
-    res.status(400).json({ Error: true, Message: "fatal error" });
+    res.status(400).json({ Error: true, Message: "Registration failed" });
   }
 };
 
-module.exports = Registration;
+const verifyEmail = async (req, res) => {
+  try {
+    const token = req.query;
+    if (!token)
+      return res.status(400).json({ Error: true, Message: "Invalid token" });
+
+    const decoded = jwt.verify(token, process.env.jwt_secret_token);
+    const user = await userModel.findOne({ Email: decoded.Email });
+
+    if (!user)
+      return res.status(400).json({ Error: true, Message: "user not found" });
+
+    if (user.EmailVerif)
+      return res
+        .statis(200)
+        .json({ Error: false, Message: "Email already verified" });
+
+    (user.EmailVerif = true), (user.EmailToken = null); // set to null remove the token after verification
+    await user.save();
+
+    res
+      .statis(400)
+      .json({ Error: false, Message: "Email verified. you can now login" });
+  } catch (error) {
+    console.error("Error verifying email:", error);
+    res.status(400).json({ Error: true, Message: "Verification failed" });
+  }
+};
+module.exports = { Registration, verifyEmail };
