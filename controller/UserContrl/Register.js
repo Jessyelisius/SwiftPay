@@ -26,7 +26,7 @@ const Registration = async (req, res) => {
       return res
         .status(400)
         .json({ Error: true, Message: "Password is short, min of 6 chars" });
-    if (passwordRegex.test(Input.Password))
+    if (!passwordRegex.test(Input.Password))
       return res.status(400).json({
         Error: true,
         Message: "Password must contain at least one letter and one number",
