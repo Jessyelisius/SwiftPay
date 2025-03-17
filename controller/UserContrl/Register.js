@@ -49,7 +49,7 @@ const Registration = async (req, res) => {
     //generate Email verifcation token
     const emailToken = jwt.sign(
       {
-        Email,
+        Email: Input.Email,
       },
       process.env.jwt_secret_token,
       { expiresIn: "1hr" }
@@ -66,10 +66,12 @@ const Registration = async (req, res) => {
     });
 
     //send email verification token
-    const verifyLink = generateLink();
+    const verifyLink = generateLink(user.Email, "verify-email");
+    console.log(verifyLink); // Debug: See the generated link
+
     await Sendmail(
-      Email,
-      "Verify Your Email",
+      Input.Email,
+      "Verify Your SwiftPay Email Address",
       `
       <!DOCTYPE html>
 <html>
@@ -132,7 +134,7 @@ const Registration = async (req, res) => {
 
 <div class="container">
     <div class="header">Verify Your Email</div>
-    <p class="message">Hi <b>${FirstName}</b>,</p>
+    <p class="message">Hi <b>${Input.FirstName}</b>,</p>
     <p class="message">
         Thank you for signing up! Please verify your email address to activate your account.
     </p>
@@ -162,7 +164,7 @@ const Registration = async (req, res) => {
 
 const verifyEmail = async (req, res) => {
   try {
-    const token = req.query;
+    const { token } = req.query;
     if (!token)
       return res.status(400).json({ Error: true, Message: "Invalid token" });
 
@@ -172,20 +174,108 @@ const verifyEmail = async (req, res) => {
     if (!user)
       return res.status(400).json({ Error: true, Message: "user not found" });
 
-    if (user.EmailVerif)
-      return res
-        .statis(200)
-        .json({ Error: false, Message: "Email already verified" });
+    // if (user.EmailVerif)
+    //   return res
+    //     .status(200)
+    //     .json({ Error: false, Message: "Email already verified" });
 
     (user.EmailVerif = true), (user.EmailToken = null); // set to null remove the token after verification
     await user.save();
+    Sendmail(
+      user.Email,
+      "SwiftPay Email Verified",
+      `
+      <!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verified Successfully</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f6f6f6;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 30px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            text-align: center;
+        }
+        .header {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .message {
+            font-size: 16px;
+            color: #333333;
+            margin: 20px 0;
+        }
+        .success-icon {
+            font-size: 50px;
+            color: #4CAF50;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #ffffff;
+            background-color: #4CAF50;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s ease-in-out;
+        }
+        .button:hover {
+            background-color: #388E3C;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777777;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <div class="header">✅ Email Verified Successfully!</div>
+    <p class="message">Hi <b>${user.FirstName}</b>,</p>
+    <p class="message">
+        Your email has been successfully verified. You can now log in and enjoy full access to SwiftPay.
+    </p>
+    <a href="{{LoginURL}}" class="button">Login to SwiftPay</a>
+    <p class="message">If you did not request this, please contact our support team.</p>
+    <div class="footer">
+        &copy; 2025 SwiftPay. All rights reserved. <br>
+        Need help? <a href="mailto:support@swiftpay.com">Contact Support</a>
+    </div>
+</div>
+
+</body>
+</html>
+
+      `
+    );
     res
-      .statis(400)
+      .status(200)
       .json({ Error: false, Message: "Email verified. you can now login" });
   } catch (error) {
     console.error("Error verifying email:", error);
     res.status(400).json({ Error: true, Message: "Verification failed" });
   }
 };
-module.exports = { Registration, verifyEmail };
+module.exports = {
+  Registration,
+  verifyEmail,
+};

@@ -1,5 +1,6 @@
 const mailer = require("nodemailer");
 const randtoken = require("rand-token");
+const jwt = require("jsonwebtoken");
 
 const generateOtp = () => {
   return Math.floor(1000 + Math.random() * 9000);
@@ -62,12 +63,16 @@ const sendOTP = async ({ to, subject, text }) => {
   }
 };
 
-function generateLink(email) {
-  const token = randtoken.generate(32); //secure token
-  return `${process.env.PORT}/${type}?token=${token}&email=${encodeURIComponent(
-    email
-  )}`;
+function generateLink(Email, type) {
+  if (!type) throw new Error("Type is required in generateLink function");
+  const token = jwt.sign({ Email }, process.env.jwt_secret_token, {
+    expiresIn: "1hr",
+  }); // Secure token
+  return `${
+    process.env.frontendURL
+  }/auth/${type}?token=${token}&email=${encodeURIComponent(Email)}`;
 }
+
 // function Links() {
 //   return randtoken.generate(16, "0123456789qwertyuiopasdfghjklzxcvbnm$.");
 // }
