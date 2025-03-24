@@ -5,6 +5,7 @@ const morgan = require("morgan");
 const session = require("express-session");
 const passport = require("passport");
 
+
 const app = express();
 
 const port = process.env.PORT;
@@ -22,6 +23,7 @@ app.use(
   })
 );
 
+
 ///google route implementation///////////////
 app.use(passport.initialize());
 app.use(passport.session());
@@ -32,4 +34,9 @@ app.use("/auth", require("./routes/GoogleAuth/googleAuthRoute"));
 
 // /////////////user auth route////////////////
 // app.use("/auth", require("./routes/userRoute/user"));
+
+
+/////////////user auth route////////////////
+app.use("/auth", require("./routes/userRoute/user"));
+
 app.listen(port, () => console.log(`swiftPay app listening on port ${port}!`));

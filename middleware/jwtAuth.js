@@ -40,6 +40,9 @@ const validationToken = async (req, res, next) => {
     });
   }
 };
+<<<<<<< HEAD
 
 
 module.exports = validationToken;
+=======
+>>>>>>> 73b8a1f7248462b0cea478f10c38419fcb0d3b1c
