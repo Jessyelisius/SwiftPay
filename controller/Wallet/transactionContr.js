@@ -1,4 +1,6 @@
+const { default: mongoose } = require("mongoose");
 const transactionModel = require("../../model/transactionModel");
+const walletModel = require("../../model/walletModel");
 
 
 const getUserTransaction = async(req, res)=>{
@@ -11,6 +13,25 @@ const getUserTransaction = async(req, res)=>{
     } catch (error) {
         console.log("error retrieving transac", error.message);
         res.status(500).json({ message: 'Error retrieving transactions', error: error.message });
+    }
+}
+
+const Transfer = async(req, res) => {
+    // const userId = req.userId;
+    const {recipientId, amount} = req.body;
+    const senderId = req.userId
+
+    if(amount <= 0) return res.status(400).json({Acess:true, Error:"Invalid Amount"})
+    const session = mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const senderWallet = await walletModel.findOne({userId:senderId}).session(session);
+        const recipientWallet = await walletModel.findOne({userId:recipientId}).session(session)
+
+        
+    } catch (error) {
+        
     }
 }
 
