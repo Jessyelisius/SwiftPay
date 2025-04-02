@@ -162,6 +162,8 @@ const Registration = async (req, res) => {
   }
 };
 
+//route to verify email
+
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;

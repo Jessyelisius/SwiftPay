@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const userModel = require("../../model/userModel");
 const bcrypt = require("bcryptjs");
+const ErrorDisplay = require("../../utils/random.util");
 
 const Login = async (req, res) => {
   try {
@@ -39,7 +40,7 @@ const Login = async (req, res) => {
     });
   } catch (error) {
     console.log("error loging in user", error);
-    res.status(400).json({ Error: true, Message: "fatal error" });
+    res.status(400).json({ Error:ErrorDisplay(error).message, Message: "fatal error" });
   }
 };
 
