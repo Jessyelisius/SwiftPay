@@ -52,7 +52,7 @@ const createJWT = async(payload, Role) =>{
 
      // Generate a transaction auth token
     let token = await jwt.sign(
-      {...payload},
+      {_id:payload._id, Role:Role},
       process.env.jwt_secret_token,
       {expiresIn:'1D'}
     );
@@ -61,17 +61,18 @@ const createJWT = async(payload, Role) =>{
     await AuthModel.create({
       UserID:payload._id,
       Auth:token,
-      User:payload.FirstName,
+      User:payload.FirstName || payload.Email,
       Role
     });
 
     return token;
   } catch (error) {
     console.log("error creating authorization",error.message)
-    res.status(400).json({Message:"cannot create auth", Error:ErrorDisplay(error).message});
+    return {Message:"cannot create auth", Error:ErrorDisplay(error).message};
   } 
 }
 
+// ✅ Validate User's JWT Token
 const verifyUserJwt = async(req,res,next) => {
   try {
      //check session first
@@ -83,32 +84,114 @@ const verifyUserJwt = async(req,res,next) => {
     let token;
 
     const AuthHeaders = req.headers.Authorization || req.headers.authorization;
-    if(AuthHeaders && AuthHeaders.startsWith('Bearer')){
+    if(AuthHeaders && AuthHeaders.startsWith("Bearer")){
       token = AuthHeaders.split(" ")[1]
     }
     
     if(!token) return res.status(400).json({Error:true, Message:"No session or token found,"})
 
-    jwt.verify(token,process.env.jwt_secret_token, async(err, decode) => {
+    jwt.verify(token,process.env.jwt_secret_token, async(err, decoded) => {
       if(err){
-        res.status().json({Error:true, Message:"Invalid or expired token"});
+        res.status(400).json({Error:true, Message:"Invalid or expired token"});
       }
-      let getAuth = await AuthModel.findOne({Auth:token, UserID:decode._doc._id, Role:"User"});
+      let getAuth = await AuthModel.findOne({
+        Auth:token, 
+        UserID:decoded._id, 
+        Role:"User"
+      });
 
-      if(getAuth) {
-       const user = await userModel.findOne({_id:decode._doc._id});
+      if (!getAuth) {
+        return res.status(403).json({
+          Error: true,
+          Message: "Unauthorized access",
+        });
       }
+
+      const user = await userModel.findById(decoded.id);
+      if (!user) {
+        return res.status(404).json({
+          Error: true,
+          Message: "User not found",
+        });
+      }
+      // if(getAuth) {
+      //  const user = await userModel.findOne({_id:decode._doc._id});
+      // }
 
       req.user = user
       return next();
-    })
+    });
 
   } catch (error) {
     res.status(400).json({Error:ErrorDisplay(error).message, Message:"error authenticating user"})
   }
 }
 
+// ✅ Validate Admin's JWT Token
+const verifyAdminJwt = async (req, res, next) => {
+  try {
+
+     //check session first
+     if (req.session && req.session.userId) {
+      req.userId = req.session.userId;
+      return next();
+    }
+
+    let token;
+    const AuthHeaders = req.headers.Authorization || req.headers.authorization;
+    if (AuthHeaders && AuthHeaders.startsWith("Bearer")) {
+      token = AuthHeaders.split(" ")[1];
+    }
+
+    if (!token) {
+      return res.status(400).json({
+        Error: true,
+        Message: "No session or token found",
+      });
+    }
+
+    jwt.verify(token, process.env.jwt_secret_token, async (err, decoded) => {
+      if (err) {
+        return res.status(400).json({
+          Error: true,
+          Message: "Invalid or expired token",
+        });
+      }
+
+      let getAuth = await AuthModel.findOne({
+        Auth: token,
+        UserID: decoded.id,
+        Role: "Admin",
+      });
+
+      if (!getAuth) {
+        return res.status(403).json({
+          Error: true,
+          Message: "Unauthorized access",
+        });
+      }
+
+      const admin = await adminModel.findById(decoded.id);
+      if (!admin) {
+        return res.status(404).json({
+          Error: true,
+          Message: "Admin not found",
+        });
+      }
+
+      req.admin = admin;
+      return next();
+    });
+  } catch (error) {
+    return res.status(400).json({
+      Error: true,
+      Message: "Error authenticating admin",
+    });
+  }
+};
+
 module.exports = {
   createJWT,
-  verifyUserJwt
+  verifyUserJwt,
+  verifyAdminJwt
 };
