@@ -12,7 +12,7 @@ const getUserTransaction = async(req, res)=>{
         res.status(200).json({Error:false, Message:"Transactions below", Result:Transaction});
     } catch (error) {
         console.log("error retrieving transac", error.message);
-        res.status(500).json({ message: 'Error retrieving transactions', error: error.message });
+        res.status(500).json({Error: error.message,  Message: 'Error retrieving transactions'});
     }
 }
 
@@ -29,12 +29,37 @@ const Transfer = async(req, res) => {
         const senderWallet = await walletModel.findOne({userId:senderId}).session(session);
         const recipientWallet = await walletModel.findOne({userId:recipientId}).session(session)
 
-        
+        if(!senderWallet || senderWallet.balance<amount){
+            return res.status(400).json({Error:true, Message:"Insufficient fund"});
+        }
+        if(!recipientWallet){
+            return res.status(400).json({Error:true, Message:"Recipient account not found"})
+        }
+
+        //credit the recipient and debit the sender
+        senderWallet.balance-=amount,
+        recipientWallet.balance+=amount
+
+        const Transaction = await transactionModel.create([{
+            userId:senderId, 
+            amount,
+            type:"transfer",
+            status:"successful"
+        }], {session});
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json({Error:false, Message:"Transfer successful", Transaction})
     } catch (error) {
-        
+        await session.abortTransaction();
+        await session.endSession();
+        console.log("transfer failed",error.message);
+        res.status(500).json({Error:true,Message:"Transfer Failed"});
     }
 }
 
 module.exports = {
-    getUserTransaction
+    getUserTransaction,
+    Transfer
 }

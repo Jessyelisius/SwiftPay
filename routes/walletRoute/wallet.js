@@ -8,8 +8,8 @@ router.get('/deposit', async(req, res) =>{
 
 })
 
-router.post('/deposit', validationToken, Deposit);
-router.post('/withdraw', validationToken, Withdraw);
+router.post('/deposit', Deposit);
+router.post('/withdraw', Withdraw);
 
 
 module.exports = router;
