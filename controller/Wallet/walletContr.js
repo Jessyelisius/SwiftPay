@@ -48,6 +48,8 @@ const Withdraw = async(req, res) => {
         if(!Wallet || Wallet.balance < amount){
             return res.status(500).json({Error:true,Message:"Insufficient Fund"})
         }
+        //api we are using korapay
+        
 
         Wallet.balance -= amount;
         await Wallet.save({session});
