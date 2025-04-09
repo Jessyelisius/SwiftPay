@@ -15,8 +15,8 @@ const Login = async(req, res) => {
         const validPwd = bcrypt.compareSync(Password, user.Password);
         if(!validPwd) return res.status(400).json({Error:true, Message:"Password is Incorrect"});
 
-        //store user in session
-        req.session?.userId = user.id
+        // //store user in session
+        // req.session.userId = user.id
 
         //jwt
         const token = jwt.sign({

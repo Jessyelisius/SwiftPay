@@ -31,6 +31,7 @@ app.use(passport.session());
 /////////////user auth route////////////////
 app.use("/auth", require("./routes/userRoute/user"));
 app.use("/auth", require("./routes/GoogleAuth/googleAuthRoute"));
+app.use("/admin", require("./routes/AdminRoute/admin"))
 
 // /////////////wallet auth route///////////////
 app.use("/wallet", require("./routes/walletRoute/wallet"));
