@@ -4,11 +4,11 @@ const forgetPwdSchema = new mongoose.Schema(
   {
     userId: {
       type: String,
-      required: true,
+      required: [true, "userId is required"],
     },
     Otp: {
       type: Number,
-      require: true,
+      require: [true, "OTP is required"],
     },
     Date: {
       type: Date.now(),
