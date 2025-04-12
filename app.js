@@ -14,6 +14,7 @@ DBconnection();
 ////////////middleware////////
 app.use(morgan("dev"));
 app.use(express.json());
+app.use(express.urlencoded({extended:true}))
 app.use(
   session({
     secret: process.env.session_secret,
@@ -31,7 +32,9 @@ app.use(passport.session());
 /////////////user auth route////////////////
 app.use("/auth", require("./routes/userRoute/user"));
 app.use("/auth", require("./routes/GoogleAuth/googleAuthRoute"));
-app.use("/admin", require("./routes/AdminRoute/admin"))
+
+/////////////////admin routes///////////////////
+app.use("/admin", require("./routes/AdminRoute/admin"));
 
 // /////////////wallet auth route///////////////
 app.use("/wallet", require("./routes/walletRoute/wallet"));

@@ -11,8 +11,9 @@ const forgetPwdSchema = new mongoose.Schema(
       require: [true, "OTP is required"],
     },
     Date: {
-      type: Date.now(),
-      ExpiresIn: "10m",
+      type: Date,
+      default:Date.now(),
+      ExpiresIn: 600,// 10 minutes in seconds
     },
   },
   { timestamps: true }
