@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 
 const ForgetPassword = async (req, res) => {
     try {
-        const Email = req.params.email
+        const Email = req.query.email
 
         const user = await adminModel.findOne({Email});
         if(!user)return res.status(400).json({Error:true, Message:"user not found"});
@@ -122,7 +122,7 @@ const ResetPassword = async(req, res) => {
     const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{6,}$/;
 
     try {
-        const Email = req.params.email;
+        const Email = req.query.email;
         const {Otp, Password} = req.body;
 
         const user = await adminModel.findOne({Email});
@@ -134,7 +134,7 @@ const ResetPassword = async(req, res) => {
         if(Password.length<6) return res.status(400).json({Error:true, Message:"Password is short min of 6 chars"})
         if(!passwordRegex.test(Password)) return res.status(400).json({Error:true, Message:"Password must contain at least one special chars"})
 
-        const hashPwd = bcrypt.hash(Password, 10);
+        const hashPwd = await bcrypt.hash(Password, 10);
 
         await adminModel.updateOne({ _id: user._id }, { Password: hashPwd });
         await forgetPwdModel.findOneAndDelete({userId:user.id,Otp});

@@ -22,6 +22,13 @@ const AdminSchema = new Schema(
         type:String,
         required:[true,"Your password must be at least 6 characters long and include at least one lowercase letter (a-z), one uppercase letter (A-Z), one number (0-9), and one special character from the set (@, $, !, %, *, ?, &)."]
     },
+    EmailVerif: {
+      type: Boolean,
+      default: false,
+    },
+    EmailToken: {
+      type: String, //for email verification link
+    },
   },
   { timestamps: true }
 );

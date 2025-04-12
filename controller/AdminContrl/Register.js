@@ -5,30 +5,40 @@ const jwt = require('jsonwebtoken');
 const ErrorDisplay = require("../../utils/random.util");
 
 const Register = async(req, res) =>{
-        // Email regex pattern for basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    // Password regex: at least 4 chars, includes a letter & a number
-    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{4,}$/;
+        //Basic Patterns
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/
 
     try {
         const Input = req.body
 
         if(!Input.FirstName) return res.status(400).json({ Error:true, Message:"Firstname is required"});
         if(!Input.LastName) return res.status(400).json({Error:true, Message:"Lastname is required" });
-        if(!Input.Email || emailRegex.test(Input.Email)) return res.status(400).json({Error:true, Message:"Invalid email format"});
+        if(!Input.Email || !emailRegex.test(Input.Email)) return res.status(400).json({Error:true, Message:"Invalid email format"});
         if(Input.Password?.length<6) return res.status(400).json({Error:true, Message:"Password is short min of 6 chars"});
         if(!passwordRegex.test(Input.Password)) return res.status(400).json({Error:true, Message:"Password mush contain special chars"});
 
         const existingUser = await adminModel.findOne({Email:Input.Email});
-        if(!existingUser) return res.status(400).json({Error:true, Message:"Admin email already in user"});
+        if(existingUser) return res.status(400).json({Error:true, Message:"Admin email already in user"});
 
-        const hashPwd = bcrypt.hash(Input.Password,10)
+        //generate Email verifcation token
+        const emailToken = jwt.sign(
+            {
+            Email: Input.Email,
+            },
+            process.env.jwt_secret_token,
+            { expiresIn: "1hr" }
+        );
+
+        const hashPwd = await bcrypt.hash(Input.Password,10)
         const user = await adminModel.create({
             FirstName:Input.FirstName,
             LastName:Input.LastName,
             Email:Input.Email,
-            Password:hashPwd
+            Password:hashPwd,
+            EmailToken: emailToken, ///to store the token
+            EmailVerif: false, //mark as unverified
         });
 
         //send email verification token
@@ -139,7 +149,7 @@ const verifyEmail = async (req, res) => {
       return res.status(400).json({ Error: true, Message: "Invalid token" });
 
     const decoded = jwt.verify(token, process.env.jwt_secret_token);
-    const user = await userModel.findOne({ Email: decoded.Email });
+    const user = await adminModel.findOne({ Email: decoded.Email });
 
     if (!user)
       return res.status(400).json({ Error: true, Message: "user not found" });
@@ -154,13 +164,13 @@ const verifyEmail = async (req, res) => {
     Sendmail(
       user.Email,
       "SwiftPay Email Verified",
-      `
-      <!DOCTYPE html>
+        `
+        <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
+    <title>Email Verified</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Verified Successfully</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -180,7 +190,7 @@ const verifyEmail = async (req, res) => {
         .header {
             font-size: 24px;
             font-weight: bold;
-            color: #4CAF50;
+            color: #d4af37;
         }
         .message {
             font-size: 16px;
@@ -188,22 +198,8 @@ const verifyEmail = async (req, res) => {
             margin: 20px 0;
         }
         .success-icon {
-            font-size: 50px;
-            color: #4CAF50;
-        }
-        .button {
-            display: inline-block;
-            padding: 12px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            color: #ffffff;
-            background-color: #4CAF50;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s ease-in-out;
-        }
-        .button:hover {
-            background-color: #388E3C;
+            font-size: 60px;
+            color: #28a745;
         }
         .footer {
             margin-top: 30px;
@@ -211,7 +207,7 @@ const verifyEmail = async (req, res) => {
             color: #777777;
         }
         .footer a {
-            color: #4CAF50;
+            color: #d4af37;
             text-decoration: none;
         }
     </style>
@@ -219,23 +215,25 @@ const verifyEmail = async (req, res) => {
 <body>
 
 <div class="container">
-    <div class="header">✅ Email Verified Successfully!</div>
+    <div class="header">Email Verified Successfully</div>
+    <div class="success-icon">✅</div>
     <p class="message">Hi <b>${user.FirstName}</b>,</p>
     <p class="message">
-        Your email has been successfully verified. You can now log in and enjoy full access to SwiftPay.
+        Your email <strong>${user.Email}</strong> has been successfully verified! You can now log in and explore all the features SwiftPay has to offer.
     </p>
-    <a href="{{LoginURL}}" class="button">Login to SwiftPay</a>
-    <p class="message">If you did not request this, please contact our support team.</p>
+    <p class="message">
+        Thank you for trusting us!
+    </p>
     <div class="footer">
         &copy; 2025 SwiftPay. All rights reserved. <br>
-        Need help? <a href="mailto:support@swiftpay.com">Contact Support</a>
+        Need help? <a href="mailto:support@jessy-codes.com.ng">Contact Support</a>
     </div>
 </div>
 
 </body>
 </html>
 
-      `
+        `
     );
     res
       .status(200)
