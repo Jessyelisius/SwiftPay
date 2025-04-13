@@ -2,6 +2,7 @@ const adminModel = require("../../model/admin/admin.Model");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const ErrorDisplay = require("../../utils/random.util");
+const { createJWT } = require("../../middleware/jwtAuth");
 
 const Login = async(req, res) => {
     try {
@@ -19,10 +20,11 @@ const Login = async(req, res) => {
         // req.session.userId = user.id
 
         //jwt
-        const token = jwt.sign({
-            userId:user.id,
-            Email:user.Email
-        },process.env.jwt_secret_token,{expiresIn:"1D"});
+        const token = await createJWT(user,'Admin');
+        // const token = jwt.sign({
+        //     userId:user.id,
+        //     Email:user.Email
+        // },process.env.jwt_secret_token,{expiresIn:"1D"});
 
         res.status(200).json({Error:false, Message:'Login successful', Result:token})
     } catch (error) {

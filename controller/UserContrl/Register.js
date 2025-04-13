@@ -20,7 +20,7 @@ const Registration = async (req, res) => {
       return res
         .status(400)
         .json({ Error: true, Message: "Lastname is required" });
-    if (!Input.Email || emailRegex.test(Input.Email))
+    if (!Input.Email || !emailRegex.test(Input.Email))
       return res
         .status(400)
         .json({ Error: true, Message: "Invalid Email"});

@@ -1,7 +1,7 @@
-const jwt = require("jsonwebtoken");
 const userModel = require("../../model/userModel");
 const bcrypt = require("bcryptjs");
 const ErrorDisplay = require("../../utils/random.util");
+const { createJWT } = require("../../middleware/jwtAuth");
 
 const Login = async (req, res) => {
   try {
@@ -23,19 +23,22 @@ const Login = async (req, res) => {
     //store user in session
     req.session.userId = user.id;
 
-    //jwt
-    const token = jwt.sign(
-      {
-        userId: user._id,
-      },
-      process.env.jwt_secret_token,
-      { expiresIn: "1hr" }
-    );
+    //jwt from auth 
+    const token = await createJWT(user, 'User');
+
+    // //jwt
+    // const token = jwt.sign(
+    //   {
+    //     userId: user._id,
+    //   },
+    //   process.env.jwt_secret_token,
+    //   { expiresIn: "1hr" }
+    // );
 
     res.status(200).json({
       Error: false,
       Message: "login successful",
-      Result: token,
+      Auth: token,
       User: user,
     });
   } catch (error) {
