@@ -32,85 +32,108 @@ const ForgetPassword = async (req, res) => {
         });
 
         await Sendmail(Email, "Reset Password Using Otp",
-           `
-           <!DOCTYPE html>
-<html>
+          `
+          <!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SwiftPay - Reset Password</title>
+  <title>SwiftPay OTP</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background-color: #f6f6f6;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background-color: #f5f5f5;
       margin: 0;
       padding: 0;
     }
-    .container {
+    .email-wrapper {
       max-width: 600px;
-      margin: 30px auto;
+      margin: 40px auto;
       background: #ffffff;
+      padding: 40px;
       border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      padding: 30px;
-      text-align: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
     }
-    .header {
-      font-size: 24px;
+    .brand-logo {
       font-weight: bold;
+      font-size: 24px;
       color: #d4af37;
+      margin-bottom: 10px;
     }
-    .message {
-      font-size: 16px;
-      color: #333333;
-      margin: 20px 0;
+    .divider {
+      width: 100%;
+      height: 4px;
+      background-color: #000;
+      margin-top: 5px;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #222;
+      font-size: 20px;
     }
     .otp-box {
       display: inline-block;
-      background: #fff8e1;
-      padding: 12px 20px;
-      font-size: 20px;
+      padding: 16px 32px;
+      background-color: #d4af37;
+      color: #000;
       font-weight: bold;
-      color: #d4af37;
-      border-radius: 6px;
+      font-size: 28px;
+      border-radius: 8px;
       margin: 20px 0;
-      letter-spacing: 2px;
+      letter-spacing: 4px;
     }
-    .footer {
-      margin-top: 30px;
-      font-size: 12px;
-      color: #777777;
-    }
-    .footer a {
+    a {
       color: #d4af37;
       text-decoration: none;
+    }
+    .footer {
+      margin-top: 40px;
+      font-size: 0.85rem;
+      color: #777;
+      text-align: center;
+    }
+    .footer-divider {
+      width: 100%;
+      height: 2px;
+      background-color: #000;
+      margin: 40px 0 10px;
     }
   </style>
 </head>
 <body>
+  <div class="email-wrapper">
+    <div class="brand-logo">SwiftPay</div>
+    <div class="divider"></div>
 
-  <div class="container">
-    <div class="header">Reset Your Password</div>
-    <p class="message">Hi <b>${user.FirstName}</b>,</p>
-    <p class="message">
-      We received a request to reset your SwiftPay account password. Use the OTP below to proceed:
-    </p>
+    <h2>Reset Your Password Using OTP</h2>
+    <p>Hi <strong>${user.FirstName}</strong>,</p>
+    <p>You're receiving this email because you requested a password reset on your SwiftPay account.</p>
+    <p>Please use the OTP below to continue:</p>
+
     <div class="otp-box">${Otp}</div>
-    <p class="message">
-      This code will expire in 10 minutes. If you didn't request a password reset, you can safely ignore this email.
+
+    <p>This OTP is valid for <strong>10 minutes</strong>. Do not share this code with anyone.</p>
+
+    <p>If you did not initiate this request, please ignore this message or contact our support team immediately at
+      <a href="mailto:support@jessy-codes.com.ng">support@swiftpay.com</a>.
     </p>
+
+    <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #d4af37;">
+      — The SwiftPay Team
+    </p>
+
+    <div class="footer-divider"></div>
+
     <div class="footer">
-      &copy; 2025 SwiftPay. All rights reserved. <br>
-      Need help? <a href="mailto:support@jessy-codes.com.ng">Contact Support</a>
+      © 2025 SwiftPay. All rights reserved.<br />
+      Abuja, Nigeria
     </div>
   </div>
-
 </body>
 </html>
 
-           `
+          `
         );
-        res.status(200).json({Error:false, Message:"otp send to email"})
+        res.status(200).json({Error:false, Message:"otp sent to email"})
     } catch (error) {
         console.log('error sending otp', error);
         res.status(400).json({Error:ErrorDisplay(error).msg})

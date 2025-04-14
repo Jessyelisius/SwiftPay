@@ -72,84 +72,103 @@ const Registration = async (req, res) => {
     await Sendmail(
       Input.Email,
       "Verify Your SwiftPay Email Address",
-      `
+        `
       <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify Your Email</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f6f6f6;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 30px auto;
-            background: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            text-align: center;
-        }
-        .header {
-            font-size: 24px;
-            font-weight: bold;
-            color: #d4af37;
-        }
-        .message {
-            font-size: 16px;
-            color: #333333;
-            margin: 20px 0;
-        }
-        .verify-button {
-            display: inline-block;
-            padding: 12px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            color: #ffffff;
-            background-color: #d4af37;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s ease-in-out;
-        }
-        .verify-button:hover {
-            background-color: #b5932d;
-        }
-        .footer {
-            margin-top: 30px;
-            font-size: 12px;
-            color: #777777;
-        }
-        .footer a {
-            color: #d4af37;
-            text-decoration: none;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>SwiftPay Email Verification</title>
+  <style>
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 0;
+    }
+    .email-wrapper {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #ffffff;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    .brand-logo {
+      font-weight: bold;
+      font-size: 24px;
+      color: #d4af37;
+      margin-bottom: 10px;
+    }
+    .divider {
+      width: 100%;
+      height: 4px;
+      background-color: #000;
+      margin-top: 5px;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #222;
+      font-size: 20px;
+    }
+    .verify-button {
+      display: inline-block;
+      padding: 14px 28px;
+      background-color: #d4af37;
+      color: #000;
+      font-weight: bold;
+      font-size: 16px;
+      text-decoration: none;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    a {
+      color: #d4af37;
+      text-decoration: none;
+    }
+    .footer {
+      margin-top: 40px;
+      font-size: 0.85rem;
+      color: #777;
+      text-align: center;
+    }
+    .footer-divider {
+      width: 100%;
+      height: 2px;
+      background-color: #000;
+      margin: 40px 0 10px;
+    }
+  </style>
 </head>
 <body>
+  <div class="email-wrapper">
+    <div class="brand-logo">SwiftPay</div>
+    <div class="divider"></div>
 
-<div class="container">
-    <div class="header">Verify Your Email</div>
-    <p class="message">Hi <b>${Input.FirstName}</b>,</p>
-    <p class="message">
-        Thank you for signing up! Please verify your email address to activate your account.
+    <h2>Verify Your SwiftPay Email Address</h2>
+    <p>Hi <strong>${Input.FirstName}</strong>,</p>
+    <p>Thanks for signing up to SwiftPay! To start using your account, please verify your email by clicking the button below:</p>
+
+    <a href="${verifyLink}" class="verify-button">Verify Email</a>
+
+    <p>This link will expire in <strong>30 minutes</strong>. If you didn’t create this account, you can safely ignore this email or contact our support at
+      <a href="mailto:support@swiftpay.com">support@swiftpay.com</a>.
     </p>
-    <a href="${verifyLink}" class="verify-button">Verify My Email</a>
-    <p class="message">If you did not sign up for this account, you can safely ignore this email.</p>
-    <div class="footer">
-        &copy; 2025 SwiftPay. All rights reserved. <br>
-        Need help? <a href="mailto:support@jessy-codes.com.ng">Contact Support</a>
-    </div>
-</div>
 
+    <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #d4af37;">
+      — The SwiftPay Team
+    </p>
+
+    <div class="footer-divider"></div>
+
+    <div class="footer">
+      © 2025 SwiftPay. All rights reserved.<br />
+      Abuja, Nigeria
+    </div>
+  </div>
 </body>
 </html>
 
-      `
+        `
     );
     res.status(200).json({
       Error: false,
@@ -188,82 +207,84 @@ const verifyEmail = async (req, res) => {
       "SwiftPay Email Verified",
       `
       <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Verified Successfully</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f6f6f6;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 30px auto;
-            background: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            text-align: center;
-        }
-        .header {
-            font-size: 24px;
-            font-weight: bold;
-            color: #4CAF50;
-        }
-        .message {
-            font-size: 16px;
-            color: #333333;
-            margin: 20px 0;
-        }
-        .success-icon {
-            font-size: 50px;
-            color: #4CAF50;
-        }
-        .button {
-            display: inline-block;
-            padding: 12px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            color: #ffffff;
-            background-color: #4CAF50;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s ease-in-out;
-        }
-        .button:hover {
-            background-color: #388E3C;
-        }
-        .footer {
-            margin-top: 30px;
-            font-size: 12px;
-            color: #777777;
-        }
-        .footer a {
-            color: #4CAF50;
-            text-decoration: none;
-        }
-    </style>
+<meta charset="UTF-8" />
+<title>Email Verified</title>
+<style>
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background-color: #f5f5f5;
+    margin: 0;
+    padding: 0;
+  }
+  .email-wrapper {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+  .brand-logo {
+    font-weight: bold;
+    font-size: 24px;
+    color: #d4af37;
+    margin-bottom: 10px;
+  }
+  .divider {
+    width: 100%;
+    height: 4px;
+    background-color: #000;
+    margin-top: 5px;
+    margin-bottom: 30px;
+  }
+  h2 {
+    color: #222;
+    font-size: 20px;
+  }
+  .footer {
+    margin-top: 40px;
+    font-size: 0.85rem;
+    color: #777;
+    text-align: center;
+  }
+  a {
+    color: #d4af37;
+    text-decoration: none;
+  }
+  .footer-divider {
+    width: 100%;
+    height: 2px;
+    background-color: #000;
+    margin: 40px 0 10px;
+  }
+</style>
 </head>
 <body>
+<div class="email-wrapper">
+  <div class="brand-logo">SwiftPay</div>
+  <div class="divider"></div>
 
-<div class="container">
-    <div class="header">✅ Email Verified Successfully!</div>
-    <p class="message">Hi <b>${user.FirstName}</b>,</p>
-    <p class="message">
-        Your email has been successfully verified. You can now log in and enjoy full access to SwiftPay.
-    </p>
-    <a href="{{LoginURL}}" class="button">Login to SwiftPay</a>
-    <p class="message">If you did not request this, please contact our support team.</p>
-    <div class="footer">
-        &copy; 2025 SwiftPay. All rights reserved. <br>
-        Need help? <a href="mailto:support@swiftpay.com">Contact Support</a>
-    </div>
+  <h2>Email Address Verified Successfully</h2>
+  <p>Hi <strong>${user.FirstName}</strong>,</p>
+  <p>We're glad to inform you that your email address has been successfully verified. You can now enjoy all features of your SwiftPay account.</p>
+
+  <p>If this wasn’t you, or you notice any suspicious activity, please contact us immediately at
+    <a href="mailto:support@swiftpay.com">support@swiftpay.com</a>.
+  </p>
+
+  <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #d4af37;">
+    — The SwiftPay Team
+  </p>
+
+  <div class="footer-divider"></div>
+
+  <div class="footer">
+    © 2025 SwiftPay. All rights reserved.<br />
+    Abuja, Nigeria
+  </div>
 </div>
-
 </body>
 </html>
 

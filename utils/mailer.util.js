@@ -63,14 +63,18 @@ const sendOTP = async ({ to, subject, text }) => {
   }
 };
 
-function generateLink(Email, type) {
+function generateLink(Email, type, role = "user") {
   if (!type) throw new Error("Type is required in generateLink function");
   const token = jwt.sign({ Email }, process.env.jwt_secret_token, {
     expiresIn: "1hr",
   }); // Secure token
+
+  //for admin and user email verification
+  const basePath = role === "admin" ? "admin" : "auth";
+  
   return `${
     process.env.frontendURL
-  }/auth/${type}?token=${token}&email=${encodeURIComponent(Email)}`;
+  }/${basePath}/${type}?token=${token}&email=${encodeURIComponent(Email)}`;
 }
 
 // function Links() {
