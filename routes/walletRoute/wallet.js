@@ -1,6 +1,6 @@
 const express = require('express');
 const validationToken = require('../../middleware/jwtAuth');
-const { Deposit, Withdraw } = require('../../controller/Wallet/walletContr');
+const { Deposit, Withdraw } = require('../../controller/WalletPaymentContrl/walletContr');
 
 const router = express.Router();
 
