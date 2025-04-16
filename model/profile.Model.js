@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs')
 const Schema =  mongoose.Schema;
 
 const ProfileSchema = new Schema({
-    userId:{
+    user:{
         type: mongoose.Schema.Types.ObjectId, 
         ref: "User", 
         required: true,
@@ -21,6 +21,17 @@ const ProfileSchema = new Schema({
         type:String,
         required:true
     },
+    gender:{ 
+        type: String, 
+        enum: ['male', 'female',]
+     },
+    stateOfOrigin:{
+        type: String,
+        required:true
+    },
+    // nin:{
+    //     type: String 
+    // },// Optional direct field (some apps do this)
     country:{
         type:String,
         required:true
@@ -29,7 +40,7 @@ const ProfileSchema = new Schema({
         type:String,
         required:true
     },
-    securityPin:{
+    transactionPin:{
         type:String,
         required:true
     },
@@ -42,12 +53,11 @@ const ProfileSchema = new Schema({
 
 //hash security pin before storing
 ProfileSchema.pre("save", async function (next) {
-    if(!this.isModified("securityPin")) 
+    if(!this.isModified("transactionPin")) 
         return next();
-
     //hash pin
-    const hashPin = await bcrypt.hash(this.securityPin, 10);
-    this.securityPin = hashPin;
+    const hashPin = await bcrypt.hash(this.transactionPin, 10);
+    this.transactionPin = hashPin;
     next();
 });
 

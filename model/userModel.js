@@ -35,6 +35,21 @@ const UserModel = new mongoose.Schema(
     EmailToken: {
       type: String, //for email verification link
     },
+    isprofileVerified:{
+      type: Boolean,
+      default:false
+    },
+    isKycVerified: { 
+      type: Boolean, 
+      default: false 
+    },
+    KycType: { 
+      type: String,
+      enum: ['passport', 'nin', 'bvn', 'driver_license'] // for consistency
+    },
+    KycDetails: { 
+      type: Object 
+    },
   },
   { timestamps: true }
 );
