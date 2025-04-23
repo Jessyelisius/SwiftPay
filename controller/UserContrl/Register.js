@@ -2,6 +2,7 @@ const userModel = require("../../model/userModel");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { generateLink, Sendmail } = require("../../utils/mailer.util");
+const walletModel = require("../../model/walletModel");
 
 const Registration = async (req, res) => {
   // Email regex pattern for basic email validation
@@ -170,6 +171,8 @@ const Registration = async (req, res) => {
 
         `
     );
+
+    await walletModel.create({userId: user._id});
     res.status(200).json({
       Error: false,
       Message: "Verification email sent. Please verify before login.",

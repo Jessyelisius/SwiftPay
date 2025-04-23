@@ -9,11 +9,14 @@ const WalletSchema = new mongoose.Schema({
     },
     balance:{
         type:Number,
-        default:0
+        default:0,
+        required:true,
+        min:[0,"Balance is too small"]
     },
     currency:{
         type:String,
-        default: 'USD'
+        enum:['NGN', 'USD'],
+        default: 'NGN'
     },
     lastTransaction:{
         type: mongoose.Schema.Types.ObjectId, 
