@@ -31,7 +31,7 @@ const ProfileSchema = new Schema({
     },
     // nin:{
     //     type: String 
-    // },// Optional direct field (some apps do this)
+    // },// Optional direct field (some apps do this);
     country:{
         type:String,
         required:true
