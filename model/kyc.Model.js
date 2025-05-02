@@ -8,25 +8,14 @@ const kycSchema = new mongoose.Schema({
     },
     idType: { 
       type: String, 
-      enum: ['passport', 'nin', 'bvn', 'driver_license'], 
+      enum: ['voters_card', 'nin'], 
       required: [true, "pls use any of the above"] 
     },
     idNumber: { 
       type: String, 
       required: [true, 'id number is required'] 
     },
-    frontImage: { 
-      type: String,
-      required: [true, 'frontImage is required']
-    }, // cloudinary URL or file path
-    backImage: { 
-      type: String,
-      required: [true, 'backImage is required']
-    },
-    // selfieWithId: { 
-    //   type: String,
-    //   // required:[true, 'selfiewithId is required']
-    // },
+   
     status: { 
       type: String, 
       enum: ['pending', 'approved', 'rejected'], 

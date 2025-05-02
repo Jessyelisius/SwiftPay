@@ -22,7 +22,7 @@ const Profile = async (req, res) => {
         // }
         
         // Create Profile
-        await profileModel.create({
+        const nuser =  await profileModel.create({
             user: req.user._id,
             phone: Input.phone,
             dob: Input.dob,
@@ -34,10 +34,12 @@ const Profile = async (req, res) => {
             transactionPin: Input.transactionPin // will be hashed in the model's pre('save')
         });
 
+        // await nuser.kycStatus({enum: 'pending'});
+
         // Update user's profileVerified field
         await userModel.updateOne(
             { _id: req.user._id },
-            { profileVerified: true }
+            { isprofileVerified: true }
         );
 
         return res.status(201).json({ Error: false, Message: "Profile updated successfully" });
