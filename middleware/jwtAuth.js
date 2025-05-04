@@ -91,12 +91,12 @@ const verifyUserJwt = async(req,res,next) => {
     if(!token) return res.status(400).json({Error:true, Message:"No session or token found,"})
 
     jwt.verify(token,process.env.jwt_secret_token, async(err, decoded) => {
-      if(err){
-        res.status(400).json({Error:true, Message:"Invalid or expired token"});
+      if(err || !decoded){
+        return res.status(400).json({Error:true, Message:"Invalid or expired token"});
       }
       let getAuth = await AuthModel.findOne({
         Auth:token, 
-        UserID:decoded._id, 
+        UserID:decoded?._id, 
         Role:"User"
       });
 
@@ -107,7 +107,7 @@ const verifyUserJwt = async(req,res,next) => {
         });
       }
 
-      const user = await userModel.findById(decoded.id);
+      const user = await userModel.findById(decoded._id);
       if (!user) {
         return res.status(404).json({
           Error: true,
@@ -123,7 +123,7 @@ const verifyUserJwt = async(req,res,next) => {
     });
 
   } catch (error) {
-    res.status(400).json({Error:ErrorDisplay(error).message, Message:"error authenticating user"})
+    return res.status(400).json({Error:ErrorDisplay(error).message, Message:"error authenticating user"})
   }
 }
 
@@ -160,7 +160,7 @@ const verifyAdminJwt = async (req, res, next) => {
 
       let getAuth = await AuthModel.findOne({
         Auth: token,
-        UserID: decoded.id,
+        UserID: decoded._id,
         Role: "Admin",
       });
 
@@ -171,7 +171,7 @@ const verifyAdminJwt = async (req, res, next) => {
         });
       }
 
-      const admin = await adminModel.findById(decoded.id);
+      const admin = await adminModel.findById(decoded._id);
       if (!admin) {
         return res.status(404).json({
           Error: true,

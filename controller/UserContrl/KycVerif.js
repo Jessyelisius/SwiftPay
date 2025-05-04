@@ -11,14 +11,14 @@ const submitKYC = async (req, res) => {
 
         if (!idType || !idNumber) return res.status(400).json({ Error: true, Message: "All fields are required" });
 
-        const existingKyc = await kycModel.findOne({ userid: req.user.id });
+        const existingKyc = await kycModel.findOne({ userId: req.user.id });
         if (existingKyc) return res.status(400).json({ Error: true, Message: "You've already submitted your KYC" });
 
         const user = await userModel.findById(req.user.id);
         if (!user) return res.status(404).json({ Error: true, Message: "User not found" });
 
         if (!user.isprofileVerified) {
-            return res.status(400).json({ Error: true, Message: "Please complete your profile before doing KYC" });
+            return res.status(400).json({ Error: true, Message: "Please complete your profile before going for KYC" });
         }
 
         let integrate;

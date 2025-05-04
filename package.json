@@ -16,7 +16,7 @@
     "rand-token": "^1.0.1",
     "yarn": "^1.22.22"
   },
-  "name": "SwiftPay",
+  "name": "swiftpay",
   "version": "1.0.0",
   "description": "A seamless Cross-Border Microtransaction platform with low fees and instant transfers.",
   "main": "app.js",
