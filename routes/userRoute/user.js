@@ -7,6 +7,7 @@ const Login = require("../../controller/UserContrl/Login");
 const { ForgetPassword, ResetPassword } = require("../../controller/UserContrl/ForgetPassword");
 const submitKYC = require("../../controller/UserContrl/KycVerif");
 const { verifyUserJwt } = require("../../middleware/jwtAuth");
+const { Profile } = require("../../controller/UserContrl/Profile");
 
 const router = express.Router();
 
@@ -15,6 +16,7 @@ router.get("/verify-email", verifyEmail);
 router.post("/login", Login);
 router.get('/forgetPassword', ForgetPassword);
 router.post('/resetPassword', ResetPassword);
+router.post('/profile', verifyUserJwt, Profile);
 router.post('/submitkyc', verifyUserJwt, submitKYC);
 
 module.exports = router;

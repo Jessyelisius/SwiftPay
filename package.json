@@ -10,6 +10,7 @@
     "mongoose": "^8.12.1",
     "morgan": "^1.10.0",
     "nodemailer": "^6.10.0",
+    "nodemon": "^3.1.10",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "rand-token": "^1.0.1",
@@ -20,5 +21,8 @@
   "description": "A seamless Cross-Border Microtransaction platform with low fees and instant transfers.",
   "main": "app.js",
   "author": "Jessie",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "start": "nodemon app"
+  }
 }
