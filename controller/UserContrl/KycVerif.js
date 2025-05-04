@@ -31,7 +31,7 @@ const submitKYC = async (req, res) => {
                 url: 'https://integrations.getravenbank.com/v1/nin/verify',
                 method: 'post',
                 headers: {
-                    "Authorization": `Bearer ${process.env.RAVEN_API_KEY}`,
+                    "Authorization": `Bearer ${process.env.raven_api_key}`,
                     "Content-Type": 'application/json'
                 },
                 data: { nin: idNumber }
@@ -43,7 +43,7 @@ const submitKYC = async (req, res) => {
                 url: 'https://integrations.getravenbank.com/v1/pvc/verify',
                 method: 'post',
                 headers: {
-                    "Authorization": `Bearer ${process.env.RAVEN_API_KEY}`,
+                    "Authorization": `Bearer ${process.env.raven_api_key}`,
                     "Content-Type": 'application/json'
                 },
                 data: { voters_card: idNumber }
@@ -76,9 +76,86 @@ const submitKYC = async (req, res) => {
 
         await profileModel.updateOne({ user: req.user.id }, { profilePhoto: integrate.data.photo });
 
-        res.status(200).json({ Access: true, Error: false, Data: integrate.data });
+        res.status(200).json({Error: false, Message: 'KYC submitted! Awaiting admin approval', Data: integrate.data });
 
-        await Sendmail(user.Email, "KYC Verified", "Congrats! Your KYC verification was successful.");
+        await Sendmail(user.Email, "KYC Submitted", 
+            `
+                        <!DOCTYPE html>
+            <html lang="en">
+            <head>
+            <meta charset="UTF-8" />
+            <title>KYC Submission Received</title>
+            <style>
+                body {
+                font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                background-color: #f5f5f5;
+                margin: 0;
+                padding: 0;
+                }
+                .email-wrapper {
+                max-width: 600px;
+                margin: 40px auto;
+                background: #ffffff;
+                padding: 40px;
+                border-radius: 8px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+                }
+                .brand-logo {
+                font-weight: bold;
+                font-size: 24px;
+                color: #d4af37;
+                margin-bottom: 10px;
+                }
+                .divider {
+                width: 100%;
+                height: 4px;
+                background-color: #6a0dad;
+                margin-top: 5px;
+                margin-bottom: 30px;
+                }
+                h2 {
+                color: #222;
+                font-size: 20px;
+                }
+                .footer {
+                margin-top: 40px;
+                font-size: 0.85rem;
+                color: #777;
+                text-align: center;
+                }
+                .footer-divider {
+                width: 100%;
+                height: 2px;
+                background-color: #6a0dad;
+                margin: 40px 0 10px;
+                }
+            </style>
+            </head>
+            <body>
+            <div class="email-wrapper">
+                <div class="brand-logo">SwiftPay</div>
+                <div class="divider"></div>
+
+                <h2>Your KYC Has Been Submitted</h2>
+                <p>Hi <strong>${req.user.FirstName}</strong>,</p>
+                <p>Thanks for completing your KYC on SwiftPay. Our team is currently reviewing your information.</p>
+                <p>You’ll be notified once it has been approved or rejected.</p>
+
+                <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #d4af37;">
+                — The SwiftPay Team
+                </p>
+
+                <div class="footer-divider"></div>
+                <div class="footer">
+                © 2025 SwiftPay. All rights reserved.<br />
+                Abuja, Nigeria
+                </div>
+            </div>
+            </body>
+            </html>
+
+            `
+        );
 
     } catch (error) {
         console.log(error?.response?.data || error);
