@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const AuthModel = require("../model/AuthModel");
 const ErrorDisplay = require("../utils/random.util");
 const userModel = require("../model/userModel");
+const adminModel = require("../model/admin/admin.Model");
 
 // const validationToken = async (req, res, next) => {
 //   try {

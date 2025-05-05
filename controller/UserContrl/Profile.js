@@ -7,7 +7,7 @@ const Profile = async (req, res) => {
         const Input = req.body;
 
         // Validate required fields
-        if (!Input.phone || !Input.dob || !Input.address || !Input.gender || !Input.stateOfOrigin || !Input.country || !Input.profilePhoto || !Input.transactionPin) {
+        if (!Input.phone || !Input.dob || !Input.address || !Input.gender || !Input.stateOfOrigin || !Input.country || !Input.transactionPin) {
             return res.status(400).json({ Error: true, Message: "All fields are required to update your profile" });
         }
 
@@ -22,15 +22,15 @@ const Profile = async (req, res) => {
         // }
         
         // Create Profile
-        const nuser =  await profileModel.create({
-            user: req.user._id,
+        await profileModel.create({
+            user: req.user.id,
             phone: Input.phone,
             dob: Input.dob,
             address: Input.address,
             gender: Input.gender,
             stateOfOrigin: Input.stateOfOrigin,
             country: Input.country,
-            profilePhoto: Input.profilePhoto,
+            // profilePhoto: Input.profilePhoto,
             transactionPin: Input.transactionPin // will be hashed in the model's pre('save')
         });
 
@@ -38,7 +38,7 @@ const Profile = async (req, res) => {
 
         // Update user's profileVerified field
         await userModel.updateOne(
-            { _id: req.user._id },
+            { _id: req.user.id },
             { isprofileVerified: true }
         );
 

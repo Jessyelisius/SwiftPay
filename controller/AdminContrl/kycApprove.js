@@ -1,4 +1,5 @@
 const kycModel = require("../../model/kyc.Model");
+const profileModel = require("../../model/profile.Model");
 const userModel = require("../../model/userModel");
 const { Sendmail } = require("../../utils/mailer.util");
 const ErrorDisplay = require("../../utils/random.util");
@@ -7,15 +8,21 @@ const ErrorDisplay = require("../../utils/random.util");
 const ApproveKYC = async(req, res) => {
 
     try {
-        const {userId} = req.params
+        const userId = req.query.userId
 
+        const user = await userModel.findById(userId);
+        if (!user) {
+        return res.status(404).json({ Error: true, Message: "User not found" });
+        }
         const kyc = await kycModel.findOneAndUpdate({userid: userId}, {status: 'approved'}, {reasonForRejection:null});
 
         if(!kyc) return res.status(400).json({Error:true, Message:"Kyc not found"});
 
-        await userModel.updateOne({id: userId}, {isKycVerified:true});
+        await userModel.updateOne({_id: userId}, {isKycVerified:true});
 
-        await Sendmail(req.user.Email, "KYC Approved", 
+        await profileModel.updateOne({user: userId}, {kycStatus:'approved'});
+
+        await Sendmail(user.Email, "KYC Approved", 
            `
            <!DOCTYPE html>
             <html lang="en">
@@ -74,7 +81,7 @@ const ApproveKYC = async(req, res) => {
                 <div class="divider"></div>
 
                 <h2>Congratulations, You're Verified!</h2>
-                <p>Hi <strong>${req.user.FirstName}</strong>,</p>
+                <p>Hi <strong>${user.FirstName}</strong>,</p>
                 <p>Your KYC has been reviewed and approved successfully. You’re now fully verified and have access to the full SwiftPay experience.</p>
 
                 <p>Start sending, receiving, and managing money with confidence.</p>
@@ -104,13 +111,24 @@ const ApproveKYC = async(req, res) => {
 
 const RejectKYC = async(req, res) => {
     try {
-       const {userId} = req.params;
+        const userId = req.query.userId
        const { reason } = req.body;
 
+       const user = await userModel.findById(userId);
+       if (!user) {
+       return res.status(404).json({ Error: true, Message: "User not found" });
+       }
        const kyc = kycModel.findOneAndUpdate({userid: userId}, {status:'rejected'}, {reasonForRejection:reason});
 
+       await userModel.updateOne({_id: userId}, {isKycVerified:false});
+
        if(!kyc) return res.status(400).json({Error:true, Message:"kyc not found"});
-       await Sendmail(req.user.Email, "KYC Rejected", 
+       
+       await userModel.updateOne({_id: userId}, {isKycVerified:false});
+
+       await profileModel.updateOne({user: userId}, {kycStatus:'rejected'});
+       
+       await Sendmail(user.Email, "KYC Rejected", 
         `
                 <!DOCTYPE html>
         <html lang="en">
@@ -177,7 +195,7 @@ const RejectKYC = async(req, res) => {
         <div class="divider"></div>
 
         <h2>KYC Verification Rejected</h2>
-        <p>Hi <strong>${req.user.FirstName}</strong>,</p>
+        <p>Hi <strong>${user.FirstName}</strong>,</p>
         <p>Unfortunately, your KYC submission was not approved at this time.</p>
 
         <div class="reason-box">

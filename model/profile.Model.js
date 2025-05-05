@@ -38,7 +38,7 @@ const ProfileSchema = new Schema({
     },
     profilePhoto:{
         type:String,
-        required:true
+        // required:true
     },
     transactionPin:{
         type:String,
