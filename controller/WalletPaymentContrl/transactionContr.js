@@ -59,6 +59,14 @@ const Transfer = async(req, res) => {
     }
 }
 
+const FailedTransaction = async() => {
+
+}
+
+const ReversedTransaction = async() =>{
+
+}
+
 module.exports = {
     getUserTransaction,
     Transfer
