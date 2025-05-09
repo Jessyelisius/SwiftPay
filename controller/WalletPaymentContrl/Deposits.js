@@ -19,7 +19,6 @@ const Deposit = async(req, res) => {
         const Transaction = await transactionModel.create([{userId,amount,type:'deposit',status:'successful'}],{session});
         await session.commitTransaction();
         session.endSession();
-
         res.status(200).json({Error:false, Message:"Deposit successful", Transaction})
 
     } catch (error) {

@@ -18,6 +18,9 @@ const WalletSchema = new mongoose.Schema({
         enum:['NGN', 'USD'],
         default: 'NGN'
     },
+    virtualAccount:{
+        type: Object,
+    },
     lastTransaction:{
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Transaction' 
