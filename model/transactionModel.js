@@ -10,6 +10,11 @@ const TransactionSchema = new mongoose.Schema({
     type: Number, 
     required: true 
 },
+  method:{
+    type:String,
+    enum:['card', 'visual_account'],
+    default:'visual_account'
+},
   type: { 
     type: String, 
     enum: ['deposit', 'withdrawal', 'transfer'], 

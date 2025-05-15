@@ -21,6 +21,9 @@ const WalletSchema = new mongoose.Schema({
     virtualAccount:{
         type: Object,
     },
+    // accountDetails:{
+    //     type: Object
+    // },
     lastTransaction:{
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Transaction' 
