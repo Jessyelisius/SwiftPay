@@ -111,7 +111,11 @@ const DepositWithCard = async (req, res) => {
                 Reference: reference,
                 Mode: "otp"
             });
-        } else if (authData?.mode === "redirect") {
+        } else if (authData?.mode === "redirect") { 
+            if (!authData?.redirect_url) {
+                throw new Error("Redirect URL missing from Korapay response");
+            }
+            
             return res.status(200).json({
                 Error: false,
                 Message: "Redirect to bank page required",
@@ -252,7 +256,9 @@ const submitCardOTP = async (req, res) => {
                 $set: {
                     "transactions.$.status": "success",
                     "transactions.$.updatedAt": new Date(),
-                    $inc: { balance: response.data.data?.amount || 0 }
+                },
+                $inc:{
+                     balance: response.data.data?.amount || 0
                 }
             },
             { session }
@@ -272,7 +278,6 @@ const submitCardOTP = async (req, res) => {
         });
 
     } catch (err) {
-        await session.abortTransaction();
         const statusCode = err.response?.status || 500;
         const errorMessage = err.response?.data?.message || "OTP verification failed";
         await walletModel.updateOne(
@@ -284,6 +289,7 @@ const submitCardOTP = async (req, res) => {
                 }
             }
         );
+        await session.abortTransaction();
         return res.status(statusCode).json({
             Error: true,
             Code: err.response?.data?.code || "VERIFICATION_FAILED",
