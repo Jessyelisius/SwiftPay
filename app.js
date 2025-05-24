@@ -25,6 +25,10 @@ app.use(
 );
 
 
+/////////////////////////webhook route///////////////////////////////
+app.use("/korapay-webhook", require("./routes/walletRoute/webhook"));
+
+
 ///google route implementation///////////////
 app.use(passport.initialize());
 app.use(passport.session());

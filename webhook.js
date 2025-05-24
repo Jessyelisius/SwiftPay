@@ -1,8 +1,6 @@
 // const verifyWebhookSignature = require('../../utils/korapayWebhook.util');
 const walletModel = require('../../model/walletModel');
 const mongoose = require('mongoose');
-
-
 // utils/korapayWebhook.util.js
 const crypto = require('crypto');
 const { Sendmail } = require('./utils/mailer.util');
@@ -33,26 +31,34 @@ const handleKorapayWebhook = async (req, res) => {
         }
 
         const event = req.body.event;
-        const data = req.body.data;
+        // const data = req.body.data;
 
         // Handle different webhook events
-        switch (event) {
-            case 'charge.success':
-                await handleSuccessfulCharge(data);
-                break;
+        // switch (event) {
+        //     case 'charge.success':
+        //         await handleSuccessfulCharge(data);
+        //         break;
                 
-            case 'charge.failure':
-                await handleFailedCharge(data);
-                break;
+        //     case 'charge.failure':
+        //         await handleFailedCharge(data);
+        //         break;
                 
-            case 'transfer.success':
-                // Handle transfer success if needed
-                break;
+        //     case 'transfer.success':
+        //         // Handle transfer success if needed
+        //         break;
                 
-            default:
-                console.log(`Unhandled event type: ${event}`);
-        }
+        //     default:
+        //         console.log(`Unhandled event type: ${event}`);
+        // }
 
+        if (event.event === "charge.success") {
+            await handleSuccessfulCharge(event.data);
+          } else if (event.event === "charge.failed") {
+            await handleFailedCharge(event.data);
+          }else{
+            console.log(`Unhandled event type: ${event}`);
+          }
+      
         return res.status(200).json({ received: true });
 
     } catch (error) {
