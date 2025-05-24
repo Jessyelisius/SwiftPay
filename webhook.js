@@ -1,5 +1,5 @@
 // const verifyWebhookSignature = require('../../utils/korapayWebhook.util');
-const walletModel = require('../../model/walletModel');
+const walletModel = require('./model/walletModel');
 const mongoose = require('mongoose');
 // utils/korapayWebhook.util.js
 const crypto = require('crypto');
