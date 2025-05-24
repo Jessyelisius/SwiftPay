@@ -1,7 +1,8 @@
 const fs = require('fs');
 const crypto = require('crypto');
 
-const korapayPublicKey = fs.readFileSync('./korapay_public_key.pem', 'utf-8');
+const korapayPublicKey = process.env.korapay_public_key;
+// fs.readFileSync('./korapay_public_key.pem', 'utf-8');
 
 function encryptKorapayPayload(payload) {
     const bufferData = Buffer.from(JSON.stringify(payload));

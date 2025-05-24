@@ -42,5 +42,6 @@ app.use("/admin", require("./routes/AdminRoute/admin"));
 
 // /////////////wallet auth route///////////////
 app.use("/wallet", require("./routes/walletRoute/wallet"));
+app.use("transaction", require("./routes/walletRoute/Transaction"));
 
 app.listen(port, () => console.log(`swiftPay app listening on port ${port}!`));
