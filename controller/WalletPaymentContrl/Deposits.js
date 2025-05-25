@@ -37,11 +37,14 @@ const DepositWithCard = async (req, res) => {
 
         const reference = `SWIFTPAY-${uuidv4()}`;
         const payload = {
-            amount,
+            amount: parseInt(amount),
             currency,
             reference,
-            email: user.Email,
-            phone: user.Phone,
+            customer:{
+                name: user.FirstName,
+                email: user.Email,
+                phone: user.Phone,
+            },
             card: {
                 number: card.number,
                 cvv: card.cvv,
@@ -52,10 +55,10 @@ const DepositWithCard = async (req, res) => {
 
         // const encryptedPayload = encryptKorapayPayload(payload);
         const integrateCard = await axios.post(
-            "https://api.korapay.com/merchant/api/v1/charges/card",
-            {
-                charge_data: payload
-            },
+            "https://api.korapay.com/merchant/api/v1/charges/card",payload,
+            // {
+            //     charge_data: payload
+            // },
             {
                 headers: {
                     Authorization: `Bearer ${process.env.kora_api_secret}`,
@@ -63,6 +66,7 @@ const DepositWithCard = async (req, res) => {
                 }
             }
         );
+        // console.log("Korapay Payload:", JSON.stringify(payload, null, 2));
 
         const cardToSave = {
             number: card.number.slice(-4),
@@ -138,7 +142,7 @@ const DepositWithCard = async (req, res) => {
 
     } catch (error) {
         await session.abortTransaction();
-        console.error("Card deposit error:", error);
+        console.error("Error charging card:", error);
         return res.status(400).json({
             Error: true,
             Message: ErrorDisplay(error).msg,
