@@ -133,7 +133,7 @@ const DepositWithCard = async (req, res) => {
         await session.commitTransaction();
         return res.status(200).json({
             Error: false,
-            Message: "Card payment initiated successfully",
+            Message: "pending payment",
             Data: {
                 reference,
                 status: "pending_verification"
