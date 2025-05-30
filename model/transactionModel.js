@@ -29,6 +29,11 @@ const TransactionSchema = new mongoose.Schema({
     type: Date, 
     default: Date.now 
 },
+reference:{
+    type: String,
+    required: true,
+    unique: true
+}
 },{timestamps:true});
 
 module.exports = mongoose.model('Transaction', TransactionSchema);

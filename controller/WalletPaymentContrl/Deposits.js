@@ -54,11 +54,22 @@ const DepositWithCard = async (req, res) => {
         };
 
         console.log("Payload:", JSON.stringify(payload, null, 2));
+        
+        // Get encryption key from environment
+        const encryptionKey = process.env.encryption_key;
+        if (!encryptionKey) {
+            throw new Error('KORAPAY_ENCRYPTION_KEY environment variable is not set');
+        }
+
+        // Encrypt the payload
+        const encryptedPayload = encryptKorapayPayload(encryptionKey, payload);
+        console.log("Encrypted payload:", encryptedPayload);
+
         // const encryptedPayload = encryptKorapayPayload(payload);
         const integrateCard = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card",
             {
-                charge_data: JSON.stringify(payload)
+                charge_data: JSON.stringify(encryptedPayload)
             },
             {
                 headers: {
@@ -73,7 +84,7 @@ const DepositWithCard = async (req, res) => {
             number: card.number.slice(-4),
             expiry_month: card.expiry_month,
             expiry_year: card.expiry_year,
-            authorization: integrateCard.data?.authorization || null
+            authorization: integrateCard.data?.data?.authorization || null
         };
 
         const updateData = {
