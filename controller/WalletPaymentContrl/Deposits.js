@@ -11,7 +11,7 @@ const DepositWithCard = async (req, res) => {
 
     try {
         const user = req.user;
-        if (!user.isKycVerified) return res.status(403).json({ Error: true, Message: "KYC not verified" });
+        if (!user?.isKycVerified) return res.status(403).json({ Error: true, Message: "KYC not verified" });
         if (!user?.isprofileVerified) return res.status(403).json({ Error: true, Message: "Profile not verified" });
 
         // Check if just requesting saved card info
@@ -53,6 +53,7 @@ const DepositWithCard = async (req, res) => {
             }
         };
 
+        console.log("Payload:", JSON.stringify(payload, null, 2));
         // const encryptedPayload = encryptKorapayPayload(payload);
         const integrateCard = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card",payload,
@@ -139,10 +140,12 @@ const DepositWithCard = async (req, res) => {
                 status: "pending_verification"
             }
         });
+        
 
     } catch (error) {
         await session.abortTransaction();
-        console.error("Error charging card:", error);
+        // console.error("Error charging card:", error);
+        console.error("Error Response:", error.response?.data);
         return res.status(400).json({
             Error: true,
             Message: ErrorDisplay(error).msg,
@@ -151,6 +154,8 @@ const DepositWithCard = async (req, res) => {
     } finally {
         session.endSession();
     }
+
+    console.log("Korapay API Secret:", process.env.kora_api_secret);
 };
 
 // POST /api/card/pin
