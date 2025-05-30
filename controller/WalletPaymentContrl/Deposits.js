@@ -56,10 +56,10 @@ const DepositWithCard = async (req, res) => {
         console.log("Payload:", JSON.stringify(payload, null, 2));
         // const encryptedPayload = encryptKorapayPayload(payload);
         const integrateCard = await axios.post(
-            "https://api.korapay.com/merchant/api/v1/charges/card",payload,
-            // {
-            //     charge_data: payload
-            // },
+            "https://api.korapay.com/merchant/api/v1/charges/card",
+            {
+                charge_data: payload
+            },
             {
                 headers: {
                     Authorization: `Bearer ${process.env.kora_api_secret}`,
