@@ -167,7 +167,6 @@ const DepositWithCard = async (req, res) => {
         session.endSession();
     }
 
-    console.log("Korapay API Secret:", process.env.kora_api_secret);
 };
 
 // POST /api/card/pin
@@ -185,8 +184,9 @@ const submitCardPIN = async (req, res) => {
             });
         }
 
+
         const response = await axios.post(
-            "https://api.korapay.com/merchant/api/v1/charges/card/pin",
+            "https://api.korapay.com/merchant/api/v1/charges/card/authorize",
             { pin, reference },
             {
                 headers: {
@@ -236,6 +236,7 @@ const submitCardPIN = async (req, res) => {
         await session.abortTransaction();
         const statusCode = err.response?.status || 500;
         const errorMessage = err.response?.data?.message || "PIN submission failed";
+        // console.error("Error Response:", err.response?.data);
         return res.status(statusCode).json({
             Error: true,
             Code: err.response?.data?.code || "PROCESSING_ERROR",
@@ -262,7 +263,7 @@ const submitCardOTP = async (req, res) => {
         }
 
         const response = await axios.post(
-            "https://api.korapay.com/merchant/api/v1/charges/card/otp",
+            "https://api.korapay.com/merchant/api/v1/charges/card/authorize",
             { otp, reference },
             {
                 headers: {
