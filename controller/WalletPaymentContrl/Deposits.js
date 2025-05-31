@@ -126,6 +126,41 @@ const DepositWithCard = async (req, res) => {
             });
         }
 
+        if (chargeStatus === 'success') {
+            // Only update transaction status, NOT balance (webhook will handle balance)
+            await newTransaction.updateOne({ status: 'success' }, { session });
+            
+            // Update wallet transaction record
+            await walletModel.updateOne(
+                { userId: user._id },
+                {
+                    $push: {
+                        transactions: {
+                            type: 'deposit',
+                            amount: validAmount,
+                            method: 'card',
+                            status: 'success', // Webhook will confirm this
+                            reference,
+                            currency
+                        }
+                    }
+                },
+                { session }
+            );
+        
+            await session.commitTransaction();
+            return res.status(200).json({
+                Error: false,
+                Status: "success",
+                Message: "Payment Successful - Processing...",
+                Data: {
+                    reference,
+                    amount: validAmount,
+                    currency
+                }
+            });
+        }
+
         const cardToSave = {
             number: card.number.slice(-4),
             expiry_month: card.expiry_month,
@@ -133,7 +168,7 @@ const DepositWithCard = async (req, res) => {
             authorization: integrateCard.data?.data?.authorization || null
         };
 
-        //
+        
         const updateData = {
             $push: {
                 transactions: {
@@ -151,11 +186,11 @@ const DepositWithCard = async (req, res) => {
             updateData.virtualAccount = cardToSave;
         }
 
-        await walletModel.updateOne(
-            { userId: user._id },
-            updateData,
-            { session }
-        );
+        // await walletModel.updateOne(
+        //     { userId: user._id },
+        //     updateData,
+        //     { session }
+        // );
 
 
         const authData = integrateCard.data?.authorization;
@@ -247,7 +282,6 @@ const submitCardPIN = async (req, res) => {
                 },
             }
         );
-
 
         console.log("Korapay PIN response:", response.data);
 
