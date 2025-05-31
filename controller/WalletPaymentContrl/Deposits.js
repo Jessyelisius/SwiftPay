@@ -187,7 +187,10 @@ const submitCardPIN = async (req, res) => {
 
         const response = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card/authorize",
-            { pin, reference },
+            { 
+                pin, 
+                transaction_reference: reference 
+            },
             {
                 headers: {
                     Authorization: `Bearer ${process.env.kora_api_secret}`,
@@ -195,6 +198,9 @@ const submitCardPIN = async (req, res) => {
                 },
             }
         );
+
+
+        console.log("Korapay PIN response:", response.data);
 
         const nextAuth = response.data.data?.authorization;
         await walletModel.updateOne(
@@ -236,7 +242,14 @@ const submitCardPIN = async (req, res) => {
         await session.abortTransaction();
         const statusCode = err.response?.status || 500;
         const errorMessage = err.response?.data?.message || "PIN submission failed";
+        
         // console.error("Error Response:", err.response?.data);
+        console.error("PIN submission error:", {
+            status: err.response?.status,
+            data: err.response?.data,
+            reference: req.body.reference
+        });
+
         return res.status(statusCode).json({
             Error: true,
             Code: err.response?.data?.code || "PROCESSING_ERROR",
@@ -264,7 +277,10 @@ const submitCardOTP = async (req, res) => {
 
         const response = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card/authorize",
-            { otp, reference },
+            { 
+                otp, 
+                transaction_reference: reference 
+            },
             {
                 headers: {
                     Authorization: `Bearer ${process.env.kora_api_secret}`,
@@ -313,6 +329,14 @@ const submitCardOTP = async (req, res) => {
             }
         );
         await session.abortTransaction();
+
+        console.error("OTP submission error:", {
+            status: err.response?.status,
+            data: err.response?.data,
+            reference: req.body.reference
+        });
+
+        
         return res.status(statusCode).json({
             Error: true,
             Code: err.response?.data?.code || "VERIFICATION_FAILED",
