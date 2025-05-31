@@ -1,11 +1,10 @@
-const  axios = require("axios");
+const axios = require("axios");
 const { default: mongoose } = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
 const walletModel = require("../../model/walletModel");
-const ErrorDisplay  = require('../../utils/random.util');
-const encryptKorapayPayload  = require('../../utils/encryption.util');
+const ErrorDisplay = require('../../utils/random.util');
+const encryptKorapayPayload = require('../../utils/encryption.util');
 const transactions = require('../../model/transactionModel');
-
 
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
@@ -37,16 +36,17 @@ const DepositWithCard = async (req, res) => {
             return res.status(400).json({ Error: true, Message: "Invalid card details" });
         }
 
-         // Fixed your code (added missing closing parenthesis)
         const amountInKobo = Math.round(parseFloat(amount) * 100);
-        if (amountInKobo < 100 || amountInKobo > 1000000) {
+        if (amountInKobo < 10000 || amountInKobo > 1000000) {
             return res.status(400).json({
                 Error: true,
                 Message: "Amount must be between ₦100 and ₦10,000",
                 Code: "INVALID_AMOUNT"
             });
         }
-        const reference = `SWIFTPAY-${uuidv4()}`;
+
+        // Use a simpler reference that Korapay can handle
+        const reference = `SWIFTPAY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
         const newTransaction = new transactions({
             userId: user._id,
@@ -61,15 +61,13 @@ const DepositWithCard = async (req, res) => {
         await newTransaction.save({ session });
         console.log("Transaction created in database:", reference);
 
-
         const payload = {
-            amount: parseInt(amount) * 100,
+            amount: amountInKobo,
             currency,
             reference,
-            customer:{
+            customer: {
                 name: user.FirstName,
                 email: user.Email,
-                // phone: user.Phone,
             },
             card: {
                 number: card.number,
@@ -79,23 +77,21 @@ const DepositWithCard = async (req, res) => {
             }
         };
 
-       
-       
         // Get encryption key from environment
         const encryptionKey = process.env.encryption_key;
         if (!encryptionKey) {
-            throw new Error('KORAPAY_ENCRYPTION_KEY environment variable is not set');
+            console.error('KORAPAY_ENCRYPTION_KEY environment variable is not set');
+            await session.abortTransaction();
+            return res.status(500).json({ Error: true, Message: "Configuration error" });
         }
 
         // Encrypt the payload
         const encryptedPayload = encryptKorapayPayload(encryptionKey, payload);
         console.log("Encrypted payload:", encryptedPayload);
 
-        // const encryptedPayload = encryptKorapayPayload(payload);
         const integrateCard = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card",
             {
-                // charge_data: JSON.stringify(encryptedPayload)
                 charge_data: encryptedPayload
             },
             {
@@ -106,15 +102,20 @@ const DepositWithCard = async (req, res) => {
             }
         );
 
-        // console.log("Full Korapay Response:", JSON.stringify(integrateCard.data, null, 2));
+        console.log("Full Korapay Response:", JSON.stringify(integrateCard.data, null, 2));
 
-        // Check if the initial charge was successful
         const chargeData = integrateCard.data?.data;
         const chargeStatus = chargeData?.status;
-
+        
+        // IMPORTANT: Store Korapay's actual reference for future use
+        const korapayReference = chargeData?.reference || reference;
+        
+        // Update our transaction with Korapay's reference
+        await newTransaction.updateOne({ 
+            korapayReference: korapayReference 
+        }, { session });
 
         if (!integrateCard.data?.status || chargeStatus === 'failed') {
-            // Update transaction status to failed
             await newTransaction.updateOne({ status: 'failed' }, { session });
             await session.commitTransaction();
             
@@ -127,7 +128,6 @@ const DepositWithCard = async (req, res) => {
         }
 
         if (chargeStatus === 'success') {
-            // Only update transaction status, NOT balance (webhook will handle balance)
             await newTransaction.updateOne({ status: 'success' }, { session });
             
             // Update wallet transaction record
@@ -137,13 +137,14 @@ const DepositWithCard = async (req, res) => {
                     $push: {
                         transactions: {
                             type: 'deposit',
-                            amount: validAmount,
+                            amount: amountInKobo / 100, // Store in Naira
                             method: 'card',
-                            status: 'success', // Webhook will confirm this
-                            reference,
+                            status: 'success',
+                            reference: korapayReference,
                             currency
                         }
-                    }
+                    },
+                    $inc: { balance: amountInKobo / 100 } // Add balance in Naira
                 },
                 { session }
             );
@@ -154,29 +155,29 @@ const DepositWithCard = async (req, res) => {
                 Status: "success",
                 Message: "Payment Successful - Processing...",
                 Data: {
-                    reference,
-                    amount: validAmount,
+                    reference: korapayReference,
+                    amount: amountInKobo / 100,
                     currency
                 }
             });
         }
 
+        // Handle card saving
         const cardToSave = {
             number: card.number.slice(-4),
             expiry_month: card.expiry_month,
             expiry_year: card.expiry_year,
-            authorization: integrateCard.data?.data?.authorization || null
+            authorization: chargeData?.authorization || null
         };
 
-        
         const updateData = {
             $push: {
                 transactions: {
                     type: 'deposit',
-                    amount,
+                    amount: amountInKobo / 100,
                     method: 'card',
                     status: 'pending',
-                    reference,
+                    reference: korapayReference,
                     currency
                 }
             }
@@ -186,28 +187,29 @@ const DepositWithCard = async (req, res) => {
             updateData.virtualAccount = cardToSave;
         }
 
-        // await walletModel.updateOne(
-        //     { userId: user._id },
-        //     updateData,
-        //     { session }
-        // );
+        await walletModel.updateOne(
+            { userId: user._id },
+            updateData,
+            { session }
+        );
 
-
-        const authData = integrateCard.data?.authorization;
+        const authData = chargeData?.authorization;
         if (authData?.mode === "pin") {
+            await session.commitTransaction();
             return res.status(200).json({
                 Error: false,
                 Message: "Card requires PIN",
                 NextStep: "Enter card PIN",
-                Reference: reference,
+                Reference: korapayReference, // Return Korapay's reference
                 Mode: "pin"
             });
         } else if (authData?.mode === "otp") {
+            await session.commitTransaction();
             return res.status(200).json({
                 Error: false,
                 Message: "Card requires OTP",
                 NextStep: "Enter OTP",
-                Reference: reference,
+                Reference: korapayReference, // Return Korapay's reference
                 Mode: "otp"
             });
         } else if (authData?.mode === "redirect") { 
@@ -215,30 +217,28 @@ const DepositWithCard = async (req, res) => {
                 throw new Error("Redirect URL missing from Korapay response");
             }
             
+            await session.commitTransaction();
             return res.status(200).json({
                 Error: false,
                 Message: "Redirect to bank page required",
                 RedirectURL: authData.redirect_url,
-                Reference: reference,
+                Reference: korapayReference, // Return Korapay's reference
                 Mode: "redirect"
             });
         }
-        console.log("Full Korapay Response:", JSON.stringify(integrateCard.data, null, 2));
 
         await session.commitTransaction();
         return res.status(200).json({
             Error: false,
             Message: "pending payment",
             Data: {
-                reference,
+                reference: korapayReference,
                 status: "pending_verification"
             }
         });
-        
 
     } catch (error) {
         await session.abortTransaction();
-        // console.error("Error charging card:", error);
         console.error("Error Response:", error.response?.data);
         return res.status(400).json({
             Error: true,
@@ -248,7 +248,6 @@ const DepositWithCard = async (req, res) => {
     } finally {
         session.endSession();
     }
-
 };
 
 // POST /api/card/pin
@@ -265,7 +264,6 @@ const submitCardPIN = async (req, res) => {
                 Message: "PIN and reference are required"
             });
         }
-
 
         const response = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card/authorize",
@@ -285,17 +283,47 @@ const submitCardPIN = async (req, res) => {
 
         console.log("Korapay PIN response:", response.data);
 
-        const nextAuth = response.data.data?.authorization;
+        const responseData = response.data.data;
+        const nextAuth = responseData?.authorization;
+        const isSuccess = responseData?.status === 'success';
+
+        // Update both transaction collections
+        await transactions.updateOne(
+            { 
+                $or: [
+                    { reference: reference },
+                    { korapayReference: reference }
+                ]
+            },
+            {
+                status: isSuccess ? 'success' : 'pending',
+                updatedAt: new Date()
+            },
+            { session }
+        );
+
         await walletModel.updateOne(
             { "transactions.reference": reference },
             {
                 $set: {
-                    "transactions.$.status": nextAuth ? "pending" : "success",
+                    "transactions.$.status": isSuccess ? "success" : "pending",
                     "transactions.$.updatedAt": new Date()
                 }
             },
             { session }
         );
+
+        if (isSuccess) {
+            // Update wallet balance
+            const amount = responseData.amount / 100; // Convert to Naira
+            await walletModel.updateOne(
+                { "transactions.reference": reference },
+                {
+                    $inc: { balance: amount }
+                },
+                { session }
+            );
+        }
 
         await session.commitTransaction();
 
@@ -312,12 +340,12 @@ const submitCardPIN = async (req, res) => {
 
         return res.status(200).json({
             Error: false,
-            Status: "success",
-            Message: "Payment Successful",
+            Status: isSuccess ? "success" : "pending",
+            Message: isSuccess ? "Payment Successful" : "Processing payment...",
             Data: {
                 reference,
-                amount: response.data.data?.amount,
-                currency: response.data.data?.currency
+                amount: responseData?.amount || 0,
+                currency: responseData?.currency
             }
         });
 
@@ -326,7 +354,20 @@ const submitCardPIN = async (req, res) => {
         const statusCode = err.response?.status || 500;
         const errorMessage = err.response?.data?.message || "PIN submission failed";
         
-        // console.error("Error Response:", err.response?.data);
+        // Update transaction as failed
+        await transactions.updateOne(
+            { 
+                $or: [
+                    { reference: req.body.reference },
+                    { korapayReference: req.body.reference }
+                ]
+            },
+            {
+                status: 'failed',
+                updatedAt: new Date()
+            }
+        );
+
         console.error("PIN submission error:", {
             status: err.response?.status,
             data: err.response?.data,
@@ -363,7 +404,7 @@ const submitCardOTP = async (req, res) => {
             { 
                 transaction_reference: reference,
                 authorization: {
-                    "otp": otp
+                    otp: otp
                 }
             },
             {
@@ -374,6 +415,26 @@ const submitCardOTP = async (req, res) => {
             }
         );
 
+        console.log("Korapay OTP response:", response.data);
+
+        const responseData = response.data.data;
+        const amount = responseData.amount / 100; // Convert to Naira
+
+        // Update both transaction collections
+        await transactions.updateOne(
+            { 
+                $or: [
+                    { reference: reference },
+                    { korapayReference: reference }
+                ]
+            },
+            {
+                status: 'success',
+                updatedAt: new Date()
+            },
+            { session }
+        );
+
         await walletModel.updateOne(
             { "transactions.reference": reference },
             {
@@ -381,31 +442,49 @@ const submitCardOTP = async (req, res) => {
                     "transactions.$.status": "success",
                     "transactions.$.updatedAt": new Date(),
                 },
-                $inc:{
-                     balance: response.data.data?.amount || 0
+                $inc: {
+                    balance: amount
                 }
             },
             { session }
         );
 
         await session.commitTransaction();
+        
         return res.status(200).json({
             Error: false,
             Status: "success",
             Message: "Payment Successful",
             Data: {
                 reference,
-                amount: response.data.data?.amount,
-                currency: response.data.data?.currency,
-                balance: response.data.data?.amount
+                amount: responseData.amount,
+                currency: responseData.currency,
+                balance: amount
             }
         });
 
     } catch (err) {
+        await session.abortTransaction();
+        
         const statusCode = err.response?.status || 500;
         const errorMessage = err.response?.data?.message || "OTP verification failed";
+        
+        // Update both collections as failed
+        await transactions.updateOne(
+            { 
+                $or: [
+                    { reference: req.body.reference },
+                    { korapayReference: req.body.reference }
+                ]
+            },
+            {
+                status: 'failed',
+                updatedAt: new Date()
+            }
+        );
+
         await walletModel.updateOne(
-            { "transactions.reference": reference },
+            { "transactions.reference": req.body.reference },
             {
                 $set: {
                     "transactions.$.status": "failed",
@@ -413,14 +492,12 @@ const submitCardOTP = async (req, res) => {
                 }
             }
         );
-        await session.abortTransaction();
 
         console.error("OTP submission error:", {
             status: err.response?.status,
             data: err.response?.data,
             reference: req.body.reference
         });
-
 
         return res.status(statusCode).json({
             Error: true,
@@ -433,7 +510,6 @@ const submitCardOTP = async (req, res) => {
 };
 
 const DepositWithVisualAccount = async (req, res) => {
-    // Implementation for visual account deposits
     return res.status(501).json({ Error: true, Message: "Not implemented yet" });
 };
 
