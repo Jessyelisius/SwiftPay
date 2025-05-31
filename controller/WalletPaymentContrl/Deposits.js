@@ -96,7 +96,26 @@ const DepositWithCard = async (req, res) => {
                 }
             }
         );
-        // console.log("Korapay Payload:", JSON.stringify(payload, null, 2));
+
+        console.log("Full Korapay Response:", JSON.stringify(integrateCard.data, null, 2));
+
+        // Check if the initial charge was successful
+        const chargeData = integrateCard.data?.data;
+        const chargeStatus = chargeData?.status;
+
+
+        if (!integrateCard.data?.status || chargeStatus === 'failed') {
+            // Update transaction status to failed
+            await newTransaction.updateOne({ status: 'failed' }, { session });
+            await session.commitTransaction();
+            
+            return res.status(400).json({
+                Error: true,
+                Message: integrateCard.data?.message || "Card charge failed",
+                Code: "CHARGE_FAILED",
+                Details: chargeData?.response_message || "Card processing failed"
+            });
+        }
 
         const cardToSave = {
             number: card.number.slice(-4),
