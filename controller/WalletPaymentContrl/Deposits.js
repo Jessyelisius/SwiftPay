@@ -43,7 +43,7 @@ const DepositWithCard = async (req, res) => {
             customer:{
                 name: user.FirstName,
                 email: user.Email,
-                phone: user.Phone,
+                // phone: user.Phone,
             },
             card: {
                 number: card.number,
