@@ -70,8 +70,8 @@ const DepositWithCard = async (req, res) => {
             }
         };
 
-        console.log("Payload:", JSON.stringify(payload, null, 2));
-        
+       
+       
         // Get encryption key from environment
         const encryptionKey = process.env.encryption_key;
         if (!encryptionKey) {
@@ -159,6 +159,7 @@ const DepositWithCard = async (req, res) => {
                 Mode: "redirect"
             });
         }
+        console.log("Full Korapay Response:", JSON.stringify(integrateCard.data, null, 2));
 
         await session.commitTransaction();
         return res.status(200).json({
@@ -205,8 +206,10 @@ const submitCardPIN = async (req, res) => {
         const response = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card/authorize",
             { 
-                pin, 
-                transaction_reference: reference 
+                transaction_reference: reference,
+                authorization: {
+                    pin: pin
+                }
             },
             {
                 headers: {
@@ -295,8 +298,10 @@ const submitCardOTP = async (req, res) => {
         const response = await axios.post(
             "https://api.korapay.com/merchant/api/v1/charges/card/authorize",
             { 
-                otp, 
-                transaction_reference: reference 
+                transaction_reference: reference,
+                authorization: {
+                    "otp": otp
+                }
             },
             {
                 headers: {
