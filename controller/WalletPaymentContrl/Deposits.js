@@ -54,7 +54,7 @@ const DepositWithCard = async (req, res) => {
 
 
         const payload = {
-            amount: parseInt(amount),
+            amount: parseInt(amount) * 100,
             currency,
             reference,
             customer:{
@@ -97,7 +97,7 @@ const DepositWithCard = async (req, res) => {
             }
         );
 
-        console.log("Full Korapay Response:", JSON.stringify(integrateCard.data, null, 2));
+        // console.log("Full Korapay Response:", JSON.stringify(integrateCard.data, null, 2));
 
         // Check if the initial charge was successful
         const chargeData = integrateCard.data?.data;
@@ -124,6 +124,7 @@ const DepositWithCard = async (req, res) => {
             authorization: integrateCard.data?.data?.authorization || null
         };
 
+        //
         const updateData = {
             $push: {
                 transactions: {
