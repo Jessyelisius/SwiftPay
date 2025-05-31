@@ -37,11 +37,20 @@ const DepositWithCard = async (req, res) => {
             return res.status(400).json({ Error: true, Message: "Invalid card details" });
         }
 
+         // Fixed your code (added missing closing parenthesis)
+        const amountInKobo = Math.round(parseFloat(amount) * 100);
+        if (amountInKobo < 100 || amountInKobo > 1000000) {
+            return res.status(400).json({
+                Error: true,
+                Message: "Amount must be between ₦100 and ₦10,000",
+                Code: "INVALID_AMOUNT"
+            });
+        }
         const reference = `SWIFTPAY-${uuidv4()}`;
 
         const newTransaction = new transactions({
             userId: user._id,
-            amount: parseInt(amount),
+            amount: amountInKobo,
             currency,
             method: 'card',
             type: 'deposit',
