@@ -4,6 +4,8 @@ const { v4: uuidv4 } = require("uuid");
 const walletModel = require("../../model/walletModel");
 const ErrorDisplay  = require('../../utils/random.util');
 const encryptKorapayPayload  = require('../../utils/encryption.util');
+const transactions = require('../../model/transactionModel');
+
 
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
@@ -36,6 +38,21 @@ const DepositWithCard = async (req, res) => {
         }
 
         const reference = `SWIFTPAY-${uuidv4()}`;
+
+        const newTransaction = new transactions({
+            userId: user._id,
+            amount: parseInt(amount),
+            currency,
+            method: 'card',
+            type: 'deposit',
+            status: 'pending',
+            reference
+        });
+        
+        await newTransaction.save({ session });
+        console.log("Transaction created in database:", reference);
+
+
         const payload = {
             amount: parseInt(amount),
             currency,
@@ -336,7 +353,7 @@ const submitCardOTP = async (req, res) => {
             reference: req.body.reference
         });
 
-        
+
         return res.status(statusCode).json({
             Error: true,
             Code: err.response?.data?.code || "VERIFICATION_FAILED",
