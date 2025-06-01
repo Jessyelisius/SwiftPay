@@ -3,6 +3,8 @@ const { handleKorapayWebhook, handleSuccessfulCharge, handleFailedCharge } = req
 const router = express.Router();
 // const korapayWebhook = require("../controllers/korapayWebhookController");
 
-router.post("/", express.json({ type: "*/*" }), handleKorapayWebhook, handleSuccessfulCharge, handleFailedCharge); // ensures raw body is parsed
+// router.post("/", express.json({ type: "*/*" }), handleKorapayWebhook, handleSuccessfulCharge, handleFailedCharge); // ensures raw body is parsed
+router.post('/', express.raw({ type: 'application/json' }), handleKorapayWebhook, handleSuccessfulCharge, handleFailedCharge); // ensures raw body is parsed
+
 
 module.exports = router;

@@ -46,6 +46,8 @@ const handleKorapayWebhook = async (req, res) => {
             });
         }
 
+        console.log('🔥 Korapay Webhook Received:', req.body);
+
         const webhookData = req.body;
         console.log('Webhook received:', JSON.stringify(webhookData, null, 2));
         

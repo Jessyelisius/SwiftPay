@@ -92,6 +92,9 @@ const DepositWithCard = async (req, res) => {
                 }
             }
         );
+        console.log('KoraPay full response', integrateCard?.data); // to see the structure
+
+        // console.log('KoraPay full response', integrateCard?.data?.data?.reference);
 
         const chargeData = integrateCard.data?.data;
         const chargeStatus = chargeData?.status;
@@ -111,7 +114,7 @@ const DepositWithCard = async (req, res) => {
         }
 
         // Fix: Use correct status value that matches your model
-        const transactionStatus = chargeStatus === 'success' ? 'successful' : 'pending';
+        const transactionStatus = chargeStatus === 'success' ? 'success' : 'pending';
 
         const updateData = {
             $push: {
@@ -138,7 +141,7 @@ const DepositWithCard = async (req, res) => {
         await walletModel.updateOne({ userId: user._id }, updateData, { session });
 
         if (chargeStatus === 'success') {
-            await newTransaction.updateOne({ status: 'successful' }, { session });
+            await newTransaction.updateOne({ status: 'success' }, { session });
             await walletModel.updateOne(
                 { userId: user._id },
                 { $inc: { balance: amountInKobo / 100 } },
@@ -216,7 +219,7 @@ const submitCardPIN = async (req, res) => {
         );
 
         const data = response.data.data;
-
+        
         // Save korapayReference
         const transaction = await transactions.findOne({ 
             $or: [{ reference }, { korapayReference: reference }] 
@@ -231,7 +234,7 @@ const submitCardPIN = async (req, res) => {
         const amount = data.amount / 100;
         
         // Fix: Use correct status values
-        const dbStatus = status === 'success' ? 'successful' : 'pending';
+        const dbStatus = status === 'success' ? 'success' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },
@@ -338,7 +341,7 @@ const submitCardOTP = async (req, res) => {
         const amount = data.amount / 100;
         
         // Fix: Use correct status values
-        const dbStatus = status === 'success' ? 'successful' : 'pending';
+        const dbStatus = status === 'success' ? 'success' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },
