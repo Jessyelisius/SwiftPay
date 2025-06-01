@@ -208,6 +208,14 @@ const submitCardPIN = async (req, res) => {
         );
 
         const data = response.data.data;
+
+        // Save korapayReference
+        const transaction = await transactions.findOne({ reference });
+        if (transaction && data.reference && transaction.korapayReference !== data.reference) {
+        transaction.korapayReference = data.reference;
+        await transaction.save({ session });
+        }
+
         const status = data?.status;
         const amount = data.amount / 100;
 
@@ -299,6 +307,14 @@ const submitCardOTP = async (req, res) => {
         );
 
         const data = response.data.data;
+
+        // Save korapayReference
+        const transaction = await transactions.findOne({ reference });
+        if (transaction && data.reference && transaction.korapayReference !== data.reference) {
+        transaction.korapayReference = data.reference;
+        await transaction.save({ session });
+        }
+
         const status = data?.status;
         const amount = data.amount / 100;
 
