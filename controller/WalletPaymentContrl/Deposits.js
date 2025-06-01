@@ -110,32 +110,35 @@ const DepositWithCard = async (req, res) => {
             });
         }
 
+        // Fix: Use correct status value that matches your model
+        const transactionStatus = chargeStatus === 'success' ? 'successful' : 'pending';
+
         const updateData = {
             $push: {
                 transactions: {
                     type: 'deposit',
                     amount: amountInKobo / 100,
                     method: 'card',
-                    status: chargeStatus === 'success' ? 'success' : 'pending',
+                    status: transactionStatus,
                     reference: korapayReference,
                     currency
                 }
             }
         };
 
-        if (saveCard) {
+        if (saveCard && chargeData?.authorization) {
             updateData.virtualAccount = {
                 number: card.number.slice(-4),
                 expiry_month: card.expiry_month,
                 expiry_year: card.expiry_year,
-                authorization: chargeData?.authorization || null
+                authorization: chargeData.authorization
             };
         }
 
         await walletModel.updateOne({ userId: user._id }, updateData, { session });
 
         if (chargeStatus === 'success') {
-            await newTransaction.updateOne({ status: 'success' }, { session });
+            await newTransaction.updateOne({ status: 'successful' }, { session });
             await walletModel.updateOne(
                 { userId: user._id },
                 { $inc: { balance: amountInKobo / 100 } },
@@ -155,19 +158,24 @@ const DepositWithCard = async (req, res) => {
             });
         }
 
+        // Fix: Better handling of undefined authMode
         const authMode = chargeData?.authorization?.mode;
+        const nextStep = authMode ? authMode.toUpperCase() : "VERIFICATION";
+        const message = authMode ? `Card requires ${authMode.toUpperCase()}` : "Card requires verification";
+
         await session.commitTransaction();
 
         return res.status(200).json({
             Error: false,
-            Message: `Card requires ${authMode?.toUpperCase() || "verification"}`,
-            NextStep: `Enter ${authMode?.toUpperCase()}`,
+            Message: message,
+            NextStep: `Enter ${nextStep}`,
             Reference: korapayReference,
-            Mode: authMode
+            Mode: authMode || "verification"
         });
 
     } catch (error) {
         await session.abortTransaction();
+        console.error('DepositWithCard Error:', error);
         return res.status(400).json({
             Error: true,
             Message: ErrorDisplay(error).msg,
@@ -210,19 +218,25 @@ const submitCardPIN = async (req, res) => {
         const data = response.data.data;
 
         // Save korapayReference
-        const transaction = await transactions.findOne({ reference });
+        const transaction = await transactions.findOne({ 
+            $or: [{ reference }, { korapayReference: reference }] 
+        });
+
         if (transaction && data.reference && transaction.korapayReference !== data.reference) {
-        transaction.korapayReference = data.reference;
-        await transaction.save({ session });
+            transaction.korapayReference = data.reference;
+            await transaction.save({ session });
         }
 
         const status = data?.status;
         const amount = data.amount / 100;
+        
+        // Fix: Use correct status values
+        const dbStatus = status === 'success' ? 'successful' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },
             {
-                status: status === 'success' ? 'success' : 'pending',
+                status: dbStatus,
                 updatedAt: new Date()
             },
             { session }
@@ -232,7 +246,7 @@ const submitCardPIN = async (req, res) => {
             { "transactions.reference": reference },
             {
                 $set: {
-                    "transactions.$.status": status === 'success' ? 'success' : 'pending',
+                    "transactions.$.status": dbStatus,
                     "transactions.$.updatedAt": new Date()
                 },
                 ...(status === 'success' && { $inc: { balance: amount } })
@@ -261,7 +275,9 @@ const submitCardPIN = async (req, res) => {
 
     } catch (err) {
         await session.abortTransaction();
+        console.error('SubmitCardPIN Error:', err);
 
+        // Update transaction as failed
         await transactions.updateOne(
             { $or: [{ reference: req.body.reference }, { korapayReference: req.body.reference }] },
             { status: 'failed', updatedAt: new Date() }
@@ -309,19 +325,25 @@ const submitCardOTP = async (req, res) => {
         const data = response.data.data;
 
         // Save korapayReference
-        const transaction = await transactions.findOne({ reference });
+        const transaction = await transactions.findOne({ 
+            $or: [{ reference }, { korapayReference: reference }] 
+        });
+
         if (transaction && data.reference && transaction.korapayReference !== data.reference) {
-        transaction.korapayReference = data.reference;
-        await transaction.save({ session });
+            transaction.korapayReference = data.reference;
+            await transaction.save({ session });
         }
 
         const status = data?.status;
         const amount = data.amount / 100;
+        
+        // Fix: Use correct status values
+        const dbStatus = status === 'success' ? 'successful' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },
             {
-                status: status === 'success' ? 'success' : 'pending',
+                status: dbStatus,
                 updatedAt: new Date()
             },
             { session }
@@ -331,7 +353,7 @@ const submitCardOTP = async (req, res) => {
             { "transactions.reference": reference },
             {
                 $set: {
-                    "transactions.$.status": status === 'success' ? 'success' : 'pending',
+                    "transactions.$.status": dbStatus,
                     "transactions.$.updatedAt": new Date()
                 },
                 ...(status === 'success' && { $inc: { balance: amount } })
@@ -350,7 +372,9 @@ const submitCardOTP = async (req, res) => {
 
     } catch (err) {
         await session.abortTransaction();
+        console.error('SubmitCardOTP Error:', err);
 
+        // Update transaction as failed
         await transactions.updateOne(
             { $or: [{ reference: req.body.reference }, { korapayReference: req.body.reference }] },
             { status: 'failed', updatedAt: new Date() }
@@ -366,9 +390,8 @@ const submitCardOTP = async (req, res) => {
     }
 };
 
-
 module.exports = {
     DepositWithCard,
     submitCardPIN,
     submitCardOTP
-}
+};

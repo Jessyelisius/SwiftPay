@@ -1,6 +1,6 @@
 const walletModel = require('./model/walletModel');
 const transactions = require('./model/transactionModel');
-const AdminTransaction = require('./model/admin/transactionModelAdmin'); // Add this import
+const AdminTransaction = require('./model/admin/transactionModelAdmin');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { Sendmail } = require('./utils/mailer.util');
@@ -12,19 +12,30 @@ const verifyWebhookSignature = (payload, signature) => {
         return false;
     }
     
+    // Fix: Handle different signature formats
+    const cleanSignature = signature?.replace('sha512=', '') || signature;
+    
     const computedSignature = crypto
         .createHmac('sha512', secret)
         .update(payload)
         .digest('hex');
         
-    return computedSignature === signature;
+    return computedSignature === cleanSignature;
 };
 
 const handleKorapayWebhook = async (req, res) => {
     try {
         const signature = req.headers['x-korapay-signature'];
-        const rawBody = JSON.stringify(req.body);
         
+        if (!signature) {
+            console.log('Missing webhook signature');
+            return res.status(401).json({ 
+                Error: true,
+                Message: "Missing webhook signature" 
+            });
+        }
+
+        const rawBody = JSON.stringify(req.body);
         const isValid = verifyWebhookSignature(rawBody, signature);
         
         if (!isValid) {
@@ -63,11 +74,11 @@ const handleSuccessfulCharge = async (data) => {
 
     try {
         const { reference, amount, currency } = data;
-        const amountInNaira = amount / 100; // Convert kobo to naira
+        const amountInNaira = amount / 100;
 
         console.log(`Processing successful charge: ${reference}, Amount: ₦${amountInNaira}`);
 
-        // Find the transaction using both reference fields (matching your other functions)
+        // Find the transaction using both reference fields
         const transaction = await transactions.findOne({
             $or: [
                 { reference: reference },
@@ -77,21 +88,22 @@ const handleSuccessfulCharge = async (data) => {
 
         if (!transaction) {
             console.log(`Transaction not found for reference: ${reference}`);
-            throw new Error("Transaction not found");
+            await session.abortTransaction();
+            return;
         }
 
-        // Check if transaction is already processed to avoid double processing
-        if (transaction.status === 'success') {
+        // Check if transaction is already processed
+        if (transaction.status === 'successful') {
             console.log(`Transaction ${reference} already processed successfully`);
             await session.commitTransaction();
             return;
         }
 
-        // Update main transaction record
+        // Update main transaction record - Fix: Use correct status
         await transactions.updateOne(
             { _id: transaction._id },
             { 
-                status: 'success',
+                status: 'successful',  // Changed from 'success' to 'successful'
                 updatedAt: new Date()
             },
             { session }
@@ -108,7 +120,7 @@ const handleSuccessfulCharge = async (data) => {
             },
             {
                 $set: {
-                    "transactions.$.status": "success",
+                    "transactions.$.status": "successful",  // Changed to match model
                     "transactions.$.updatedAt": new Date()
                 },
                 $inc: { balance: amountInNaira }
@@ -116,7 +128,7 @@ const handleSuccessfulCharge = async (data) => {
             { session }
         );
 
-        // If wallet transaction not found, create it (fallback safety)
+        // If wallet transaction not found, create it
         if (walletUpdateResult.matchedCount === 0) {
             console.log(`Wallet transaction not found for reference: ${reference}, creating new entry`);
             
@@ -128,7 +140,7 @@ const handleSuccessfulCharge = async (data) => {
                             type: 'deposit',
                             amount: amountInNaira,
                             method: 'card',
-                            status: 'success',
+                            status: 'successful',  // Changed to match model
                             reference: reference,
                             currency: currency || 'NGN',
                             createdAt: new Date(),
@@ -141,7 +153,7 @@ const handleSuccessfulCharge = async (data) => {
             );
         }
 
-        // Create admin transaction record for successful deposit
+        // Create admin transaction record
         const adminTransaction = new AdminTransaction({
             userId: transaction.userId._id,
             transactionId: transaction._id,
@@ -149,13 +161,13 @@ const handleSuccessfulCharge = async (data) => {
             method: 'card',
             amount: amountInNaira,
             currency: currency || 'NGN',
-            status: 'success',
+            status: 'successful',  // Changed to match model
             reference: reference,
             korapayReference: reference,
             description: `Card deposit - ${reference}`,
             metadata: {
                 paymentGateway: 'korapay',
-                originalAmount: amount, // in kobo
+                originalAmount: amount,
                 processedVia: 'webhook'
             }
         });
@@ -164,52 +176,56 @@ const handleSuccessfulCharge = async (data) => {
 
         console.log(`Successfully processed: ${reference}, Amount: ₦${amountInNaira}`);
 
-        // Prepare email data
+        // Send success email
         const user = transaction.userId;
         const FirstName = user.FirstName || user.FullName?.split(" ")[0] || "Customer";
         const Email = user.Email;
         const date = new Date().toLocaleString();
 
-        // Send success email (same as your current template)
-        await Sendmail(Email, "SwiftPay Transaction Successful",
-            `<!DOCTYPE html>
-            <html lang="en">
-            <head>
-              <meta charset="UTF-8" />
-              <title>SwiftPay Transaction Successful</title>
-              <style>
-                body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
-                .email-wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
-                .brand-logo { font-weight: bold; font-size: 24px; color: #4caf50; margin-bottom: 10px; }
-                .divider { width: 100%; height: 4px; background-color: #000; margin-top: 5px; margin-bottom: 30px; }
-                h2 { color: #222; font-size: 20px; }
-                .success-badge { display: inline-block; background-color: #4caf50; color: #fff; font-weight: bold; padding: 10px 16px; border-radius: 6px; font-size: 16px; margin-top: 20px; margin-bottom: 20px; }
-                .footer { margin-top: 40px; font-size: 0.85rem; color: #777; text-align: center; }
-                .footer-divider { width: 100%; height: 2px; background-color: #000; margin: 40px 0 10px; }
-              </style>
-            </head>
-            <body>
-              <div class="email-wrapper">
-                <div class="brand-logo">SwiftPay</div>
-                <div class="divider"></div>
-                <h2>Transaction Successful 🎉</h2>
-                <p>Hi <strong>${FirstName}</strong>,</p>
-                <p>Your recent deposit was successful.</p>
-                <div class="success-badge">Transaction Complete</div>
-                <p>
-                  <strong>Reference:</strong> ${reference}<br />
-                  <strong>Amount:</strong> ₦${amountInNaira.toFixed(2)}<br />
-                  <strong>Currency:</strong> ${currency || 'NGN'}<br />
-                  <strong>Date:</strong> ${date}
-                </p>
-                <p>Thank you for using SwiftPay. If you need help, reach us at <a href="mailto:support@swiftpay.com">support@swiftpay.com</a>.</p>
-                <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #4caf50;">— The SwiftPay Team</p>
-                <div class="footer-divider"></div>
-                <div class="footer">© 2025 SwiftPay. All rights reserved.<br />Abuja, Nigeria</div>
-              </div>
-            </body>
-            </html>`
-        );
+        try {
+            await Sendmail(Email, "SwiftPay Transaction Successful",
+                `<!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="UTF-8" />
+                  <title>SwiftPay Transaction Successful</title>
+                  <style>
+                    body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
+                    .email-wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
+                    .brand-logo { font-weight: bold; font-size: 24px; color: #4caf50; margin-bottom: 10px; }
+                    .divider { width: 100%; height: 4px; background-color: #000; margin-top: 5px; margin-bottom: 30px; }
+                    h2 { color: #222; font-size: 20px; }
+                    .success-badge { display: inline-block; background-color: #4caf50; color: #fff; font-weight: bold; padding: 10px 16px; border-radius: 6px; font-size: 16px; margin-top: 20px; margin-bottom: 20px; }
+                    .footer { margin-top: 40px; font-size: 0.85rem; color: #777; text-align: center; }
+                    .footer-divider { width: 100%; height: 2px; background-color: #000; margin: 40px 0 10px; }
+                  </style>
+                </head>
+                <body>
+                  <div class="email-wrapper">
+                    <div class="brand-logo">SwiftPay</div>
+                    <div class="divider"></div>
+                    <h2>Transaction Successful 🎉</h2>
+                    <p>Hi <strong>${FirstName}</strong>,</p>
+                    <p>Your recent deposit was successful.</p>
+                    <div class="success-badge">Transaction Complete</div>
+                    <p>
+                      <strong>Reference:</strong> ${reference}<br />
+                      <strong>Amount:</strong> ₦${amountInNaira.toFixed(2)}<br />
+                      <strong>Currency:</strong> ${currency || 'NGN'}<br />
+                      <strong>Date:</strong> ${date}
+                    </p>
+                    <p>Thank you for using SwiftPay. If you need help, reach us at <a href="mailto:support@swiftpay.com">support@swiftpay.com</a>.</p>
+                    <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #4caf50;">— The SwiftPay Team</p>
+                    <div class="footer-divider"></div>
+                    <div class="footer">© 2025 SwiftPay. All rights reserved.<br />Abuja, Nigeria</div>
+                  </div>
+                </body>
+                </html>`
+            );
+        } catch (emailError) {
+            console.error('Email sending failed:', emailError);
+            // Don't fail the transaction if email fails
+        }
 
         await session.commitTransaction();
     } catch (error) {
@@ -231,7 +247,6 @@ const handleFailedCharge = async (data) => {
 
         console.log(`Processing failed charge: ${reference}, Reason: ${reason}`);
 
-        // Find the transaction using both reference fields
         const transaction = await transactions.findOne({
             $or: [
                 { reference: reference },
@@ -241,7 +256,8 @@ const handleFailedCharge = async (data) => {
             
         if (!transaction) {
             console.log(`Transaction not found for failed charge: ${reference}`);
-            throw new Error("Transaction not found");
+            await session.abortTransaction();
+            return;
         }
 
         // Check if already processed as failed
@@ -304,52 +320,56 @@ const handleFailedCharge = async (data) => {
 
         await adminTransaction.save({ session });
 
-        // Prepare email data
+        // Send failure email
         const user = transaction.userId;
         const FirstName = user.FirstName || user.FullName?.split(" ")[0] || "Customer";
         const Email = user.Email;
         const date = new Date().toLocaleString();
 
-        // Send failed transaction email
-        await Sendmail(Email, "SwiftPay Transaction Failed", 
-            `<!DOCTYPE html>
-            <html lang="en">
-            <head>
-              <meta charset="UTF-8" />
-              <title>SwiftPay Transaction Failed</title>
-              <style>
-                body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
-                .email-wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
-                .brand-logo { font-weight: bold; font-size: 24px; color: #d4af37; margin-bottom: 10px; }
-                .divider { width: 100%; height: 4px; background-color: #000; margin-top: 5px; margin-bottom: 30px; }
-                h2 { color: #222; font-size: 20px; }
-                .fail-badge { display: inline-block; background-color: #e53935; color: #fff; font-weight: bold; padding: 10px 16px; border-radius: 6px; font-size: 16px; margin-top: 20px; margin-bottom: 20px; }
-                .footer { margin-top: 40px; font-size: 0.85rem; color: #777; text-align: center; }
-                .footer-divider { width: 100%; height: 2px; background-color: #000; margin: 40px 0 10px; }
-              </style>
-            </head>
-            <body>
-              <div class="email-wrapper">
-                <div class="brand-logo">SwiftPay</div>
-                <div class="divider"></div>
-                <h2>Transaction Failed 😞</h2>
-                <p>Hi <strong>${FirstName}</strong>,</p>
-                <p>Unfortunately, your recent transaction failed.</p>
-                <div class="fail-badge">Transaction Failed</div>
-                <p>
-                  <strong>Reference:</strong> ${reference}<br />
-                  <strong>Amount:</strong> ₦${amountInNaira.toFixed(2)}<br />
-                  <strong>Reason:</strong> ${reason}<br />
-                  <strong>Date:</strong> ${date}
-                </p>
-                <p>Please try again or contact <a href="mailto:support@swiftpay.com">support@swiftpay.com</a> if you need assistance.</p>
-                <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #d4af37;">— The SwiftPay Team</p>
-                <div class="footer-divider"></div>
-                <div class="footer">© 2025 SwiftPay. All rights reserved.<br />Abuja, Nigeria</div>
-              </div>
-            </body>
-            </html>`
-        );
+        try {
+            await Sendmail(Email, "SwiftPay Transaction Failed", 
+                `<!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="UTF-8" />
+                  <title>SwiftPay Transaction Failed</title>
+                  <style>
+                    body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0; }
+                    .email-wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
+                    .brand-logo { font-weight: bold; font-size: 24px; color: #d4af37; margin-bottom: 10px; }
+                    .divider { width: 100%; height: 4px; background-color: #000; margin-top: 5px; margin-bottom: 30px; }
+                    h2 { color: #222; font-size: 20px; }
+                    .fail-badge { display: inline-block; background-color: #e53935; color: #fff; font-weight: bold; padding: 10px 16px; border-radius: 6px; font-size: 16px; margin-top: 20px; margin-bottom: 20px; }
+                    .footer { margin-top: 40px; font-size: 0.85rem; color: #777; text-align: center; }
+                    .footer-divider { width: 100%; height: 2px; background-color: #000; margin: 40px 0 10px; }
+                  </style>
+                </head>
+                <body>
+                  <div class="email-wrapper">
+                    <div class="brand-logo">SwiftPay</div>
+                    <div class="divider"></div>
+                    <h2>Transaction Failed 😞</h2>
+                    <p>Hi <strong>${FirstName}</strong>,</p>
+                    <p>Unfortunately, your recent transaction failed.</p>
+                    <div class="fail-badge">Transaction Failed</div>
+                    <p>
+                      <strong>Reference:</strong> ${reference}<br />
+                      <strong>Amount:</strong> ₦${amountInNaira.toFixed(2)}<br />
+                      <strong>Reason:</strong> ${reason}<br />
+                      <strong>Date:</strong> ${date}
+                    </p>
+                    <p>Please try again or contact <a href="mailto:support@swiftpay.com">support@swiftpay.com</a> if you need assistance.</p>
+                    <p style="font-family: 'Georgia', cursive; font-size: 1rem; color: #d4af37;">— The SwiftPay Team</p>
+                    <div class="footer-divider"></div>
+                    <div class="footer">© 2025 SwiftPay. All rights reserved.<br />Abuja, Nigeria</div>
+                  </div>
+                </body>
+                </html>`
+            );
+        } catch (emailError) {
+            console.error('Email sending failed:', emailError);
+            // Don't fail the transaction if email fails
+        }
 
         await session.commitTransaction();
     } catch (error) {
