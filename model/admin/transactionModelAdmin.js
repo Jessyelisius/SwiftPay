@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const TransactionSchema = new mongoose.Schema({
+const AdminTransactionSchema = new mongoose.Schema({
   userId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
@@ -35,10 +35,11 @@ reference:{
     unique: true
 },
 korapayReference:{
-  type: String,
-    required: true,
-    unique: true
-}
+    type: String,
+      required: true,
+      unique: true
+  }
+
 },{timestamps:true});
 
-module.exports = mongoose.model('Transaction', TransactionSchema);
+module.exports = mongoose.model('AdminTransaction', AdminTransactionSchema);

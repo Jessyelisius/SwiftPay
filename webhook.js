@@ -1,5 +1,6 @@
 const walletModel = require('./model/walletModel');
-const transactions = require('./model/transactionModel'); // Add this import
+const transactions = require('./model/transactionModel');
+const AdminTransaction = require('./model/admin/transactionModelAdmin'); // Add this import
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { Sendmail } = require('./utils/mailer.util');
@@ -66,29 +67,29 @@ const handleSuccessfulCharge = async (data) => {
 
         console.log(`Processing successful charge: ${reference}, Amount: ₦${amountInNaira}`);
 
-        // Find wallet by searching both reference fields
-        const wallet = await walletModel
-            .findOne({ 
-                $or: [
-                    { "transactions.reference": reference },
-                    { "transactions.korapayReference": reference }
-                ]
-            })
-            .populate("userId", "Email FullName FirstName");
+        // Find the transaction using both reference fields (matching your other functions)
+        const transaction = await transactions.findOne({
+            $or: [
+                { reference: reference },
+                { korapayReference: reference }
+            ]
+        }).populate('userId', 'Email FullName FirstName');
 
-        if (!wallet) {
-            console.log(`Wallet not found for reference: ${reference}`);
-            throw new Error("Wallet not found");
+        if (!transaction) {
+            console.log(`Transaction not found for reference: ${reference}`);
+            throw new Error("Transaction not found");
         }
 
-        // Update main transactions collection
+        // Check if transaction is already processed to avoid double processing
+        if (transaction.status === 'success') {
+            console.log(`Transaction ${reference} already processed successfully`);
+            await session.commitTransaction();
+            return;
+        }
+
+        // Update main transaction record
         await transactions.updateOne(
-            { 
-                $or: [
-                    { reference: reference },
-                    { korapayReference: reference }
-                ]
-            },
+            { _id: transaction._id },
             { 
                 status: 'success',
                 updatedAt: new Date()
@@ -96,12 +97,13 @@ const handleSuccessfulCharge = async (data) => {
             { session }
         );
 
-        // Update wallet transaction and balance
+        // Find and update wallet transaction
         const walletUpdateResult = await walletModel.updateOne(
             { 
+                userId: transaction.userId._id,
                 $or: [
                     { "transactions.reference": reference },
-                    { "transactions.korapayReference": reference }
+                    { "transactions.reference": transaction.reference }
                 ]
             },
             {
@@ -114,11 +116,12 @@ const handleSuccessfulCharge = async (data) => {
             { session }
         );
 
+        // If wallet transaction not found, create it (fallback safety)
         if (walletUpdateResult.matchedCount === 0) {
-            console.log(`No wallet transaction found for reference: ${reference}`);
-            // If transaction not found in wallet, add it
+            console.log(`Wallet transaction not found for reference: ${reference}, creating new entry`);
+            
             await walletModel.updateOne(
-                { _id: wallet._id },
+                { userId: transaction.userId._id },
                 {
                     $push: {
                         transactions: {
@@ -127,25 +130,47 @@ const handleSuccessfulCharge = async (data) => {
                             method: 'card',
                             status: 'success',
                             reference: reference,
-                            currency: currency,
+                            currency: currency || 'NGN',
                             createdAt: new Date(),
                             updatedAt: new Date()
                         }
                     },
                     $inc: { balance: amountInNaira }
                 },
-                { session }
+                { upsert: true, session }
             );
         }
+
+        // Create admin transaction record for successful deposit
+        const adminTransaction = new AdminTransaction({
+            userId: transaction.userId._id,
+            transactionId: transaction._id,
+            type: 'deposit',
+            method: 'card',
+            amount: amountInNaira,
+            currency: currency || 'NGN',
+            status: 'success',
+            reference: reference,
+            korapayReference: reference,
+            description: `Card deposit - ${reference}`,
+            metadata: {
+                paymentGateway: 'korapay',
+                originalAmount: amount, // in kobo
+                processedVia: 'webhook'
+            }
+        });
+
+        await adminTransaction.save({ session });
 
         console.log(`Successfully processed: ${reference}, Amount: ₦${amountInNaira}`);
 
         // Prepare email data
-        const FirstName = wallet.userId.FirstName || wallet.userId.FullName?.split(" ")[0] || "Customer";
-        const Email = wallet.userId.Email;
+        const user = transaction.userId;
+        const FirstName = user.FirstName || user.FullName?.split(" ")[0] || "Customer";
+        const Email = user.Email;
         const date = new Date().toLocaleString();
 
-        // Send success email
+        // Send success email (same as your current template)
         await Sendmail(Email, "SwiftPay Transaction Successful",
             `<!DOCTYPE html>
             <html lang="en">
@@ -174,7 +199,7 @@ const handleSuccessfulCharge = async (data) => {
                 <p>
                   <strong>Reference:</strong> ${reference}<br />
                   <strong>Amount:</strong> ₦${amountInNaira.toFixed(2)}<br />
-                  <strong>Currency:</strong> ${currency}<br />
+                  <strong>Currency:</strong> ${currency || 'NGN'}<br />
                   <strong>Date:</strong> ${date}
                 </p>
                 <p>Thank you for using SwiftPay. If you need help, reach us at <a href="mailto:support@swiftpay.com">support@swiftpay.com</a>.</p>
@@ -201,32 +226,34 @@ const handleFailedCharge = async (data) => {
     session.startTransaction();
 
     try {
-        const { reference, reason } = data;
+        const { reference, reason, amount, currency } = data;
+        const amountInNaira = amount ? amount / 100 : 0;
 
         console.log(`Processing failed charge: ${reference}, Reason: ${reason}`);
 
-        const wallet = await walletModel
-            .findOne({ 
-                $or: [
-                    { "transactions.reference": reference },
-                    { "transactions.korapayReference": reference }
-                ]
-            })
-            .populate("userId", "Email FullName FirstName");
+        // Find the transaction using both reference fields
+        const transaction = await transactions.findOne({
+            $or: [
+                { reference: reference },
+                { korapayReference: reference }
+            ]
+        }).populate('userId', 'Email FullName FirstName');
             
-        if (!wallet) {
-            console.log(`Wallet not found for failed charge: ${reference}`);
-            throw new Error("Wallet not found");
+        if (!transaction) {
+            console.log(`Transaction not found for failed charge: ${reference}`);
+            throw new Error("Transaction not found");
         }
 
-        // Update main transactions collection
+        // Check if already processed as failed
+        if (transaction.status === 'failed') {
+            console.log(`Transaction ${reference} already marked as failed`);
+            await session.commitTransaction();
+            return;
+        }
+
+        // Update main transaction record
         await transactions.updateOne(
-            { 
-                $or: [
-                    { reference: reference },
-                    { korapayReference: reference }
-                ]
-            },
+            { _id: transaction._id },
             { 
                 status: 'failed',
                 failureReason: reason,
@@ -238,9 +265,10 @@ const handleFailedCharge = async (data) => {
         // Update wallet transaction status
         await walletModel.updateOne(
             { 
+                userId: transaction.userId._id,
                 $or: [
                     { "transactions.reference": reference },
-                    { "transactions.korapayReference": reference }
+                    { "transactions.reference": transaction.reference }
                 ]
             },
             {
@@ -253,9 +281,33 @@ const handleFailedCharge = async (data) => {
             { session }
         );
 
+        // Create admin transaction record for failed deposit
+        const adminTransaction = new AdminTransaction({
+            userId: transaction.userId._id,
+            transactionId: transaction._id,
+            type: 'deposit',
+            method: 'card',
+            amount: amountInNaira,
+            currency: currency || 'NGN',
+            status: 'failed',
+            reference: reference,
+            korapayReference: reference,
+            description: `Failed card deposit - ${reference}`,
+            failureReason: reason,
+            metadata: {
+                paymentGateway: 'korapay',
+                originalAmount: amount || transaction.amount,
+                processedVia: 'webhook',
+                failureDetails: reason
+            }
+        });
+
+        await adminTransaction.save({ session });
+
         // Prepare email data
-        const FirstName = wallet.userId.FirstName || wallet.userId.FullName?.split(" ")[0] || "Customer";
-        const Email = wallet.userId.Email;
+        const user = transaction.userId;
+        const FirstName = user.FirstName || user.FullName?.split(" ")[0] || "Customer";
+        const Email = user.Email;
         const date = new Date().toLocaleString();
 
         // Send failed transaction email
@@ -286,6 +338,7 @@ const handleFailedCharge = async (data) => {
                 <div class="fail-badge">Transaction Failed</div>
                 <p>
                   <strong>Reference:</strong> ${reference}<br />
+                  <strong>Amount:</strong> ₦${amountInNaira.toFixed(2)}<br />
                   <strong>Reason:</strong> ${reason}<br />
                   <strong>Date:</strong> ${date}
                 </p>
