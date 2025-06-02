@@ -6,6 +6,7 @@ const ErrorDisplay = require('../../utils/random.util');
 const encryptKorapayPayload = require('../../utils/encryption.util');
 const transactions = require('../../model/transactionModel');
 
+
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -106,8 +107,8 @@ const DepositWithCard = async (req, res) => {
         const chargeData = integrateCard.data?.data;
         const chargeStatus = chargeData?.status;
         
-        // Fix: Get KoraPay reference properly
-        let korapayReference = chargeData?.reference;
+        // Fix: Get KoraPay reference from correct field
+        let korapayReference = chargeData?.transaction_reference;
         
         // If no reference from KoraPay, keep our original reference
         if (!korapayReference) {
@@ -248,10 +249,10 @@ const submitCardPIN = async (req, res) => {
         });
 
         let finalReference = reference;
-        if (transaction && data.reference && transaction.korapayReference !== data.reference) {
-            transaction.korapayReference = data.reference;
+        if (transaction && data.transaction_reference && transaction.korapayReference !== data.transaction_reference) {
+            transaction.korapayReference = data.transaction_reference;
             await transaction.save({ session });
-            finalReference = data.reference;
+            finalReference = data.transaction_reference;
         }
 
         const status = data?.status;
@@ -358,10 +359,10 @@ const submitCardOTP = async (req, res) => {
         });
 
         let finalReference = reference;
-        if (transaction && data.reference && transaction.korapayReference !== data.reference) {
-            transaction.korapayReference = data.reference;
+        if (transaction && data.transaction_reference && transaction.korapayReference !== data.transaction_reference) {
+            transaction.korapayReference = data.transaction_reference;
             await transaction.save({ session });
-            finalReference = data.reference;
+            finalReference = data.transaction_reference;
         }
 
         const status = data?.status;
