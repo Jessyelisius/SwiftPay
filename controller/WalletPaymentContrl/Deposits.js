@@ -136,7 +136,7 @@ const DepositWithCard = async (req, res) => {
         }
 
         // Fix: Use correct status value that matches your model
-        const transactionStatus = chargeStatus === 'success' ? 'successful' : 'pending';
+        const transactionStatus = chargeStatus === 'success' ? 'success' : 'pending';
 
         const updateData = {
             $push: {
@@ -163,7 +163,7 @@ const DepositWithCard = async (req, res) => {
         await walletModel.updateOne({ userId: user._id }, updateData, { session });
 
         if (chargeStatus === 'success') {
-            await newTransaction.updateOne({ status: 'successful' }, { session });
+            await newTransaction.updateOne({ status: 'success' }, { session });
             await walletModel.updateOne(
                 { userId: user._id },
                 { $inc: { balance: amountInNaira } }, // Increment in Naira
@@ -259,7 +259,7 @@ const submitCardPIN = async (req, res) => {
         const amount = data.amount ? data.amount / 100 : transaction?.amount || 0; // Convert from kobo to Naira
         
         // Fix: Use correct status values
-        const dbStatus = status === 'success' ? 'successful' : 'pending';
+        const dbStatus = status === 'success' ? 'success' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },
@@ -369,7 +369,7 @@ const submitCardOTP = async (req, res) => {
         const amount = data.amount ? data.amount / 100 : transaction?.amount || 0; // Convert from kobo to Naira
         
         // Fix: Use correct status values
-        const dbStatus = status === 'success' ? 'successful' : 'pending';
+        const dbStatus = status === 'success' ? 'success' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },

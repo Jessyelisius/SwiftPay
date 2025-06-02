@@ -5,23 +5,50 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { Sendmail } = require('./utils/mailer.util');
 
-const verifyWebhookSignature = (payload, signature) => {
-    const secret = process.env.korapay_webhook;
-    if (!secret) {
-        console.error('Korapay webhook secret not configured');
-        return false;
-    }
+// const verifyWebhookSignature = (payload, signature) => {
+//     const secret = process.env.korapay_webhook;
+//     if (!secret) {
+//         console.error('Korapay webhook secret not configured');
+//         return false;
+//     }
     
-    // Fix: Handle different signature formats
-    const cleanSignature = signature?.replace('sha512=', '') || signature;
+//     // Fix: Handle different signature formats
+//     const cleanSignature = signature?.replace('sha512=', '') || signature;
     
-    const computedSignature = crypto
-        .createHmac('sha512', secret)
-        .update(payload)
-        .digest('hex');
+//     const computedSignature = crypto
+//         .createHmac('sha512', secret)
+//         .update(payload)
+//         .digest('hex');
         
-    return computedSignature === cleanSignature;
+//     return computedSignature === cleanSignature;
+// };
+
+const verifyWebhookSignature = (payload, signature) => {
+  // 1. Get the secret from environment variables
+  const secret = process.env.KORAPAY_WEBHOOK_SECRET;
+  if (!secret) {
+      console.error('Korapay webhook secret not configured');
+      throw new Error('Webhook secret not configured');
+  }
+
+  // 2. Normalize the signature (remove prefix if present)
+  const cleanSignature = signature.startsWith('sha512=') 
+      ? signature.replace('sha512=', '')
+      : signature;
+
+  // 3. Calculate HMAC
+  const computedSignature = crypto
+      .createHmac('sha512', secret)
+      .update(payload)
+      .digest('hex');
+
+  // 4. Compare signatures (case-sensitive)
+  return crypto.timingSafeEqual(
+      Buffer.from(computedSignature, 'utf8'),
+      Buffer.from(cleanSignature, 'utf8')
+  );
 };
+
 
 const handleKorapayWebhook = async (req, res) => {
     try {
