@@ -1,11 +1,3 @@
-const axios = require("axios");
-const { default: mongoose } = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
-const walletModel = require("../../model/walletModel");
-const ErrorDisplay = require('../../utils/random.util');
-const encryptKorapayPayload = require('../../utils/encryption.util');
-const transactions = require('../../model/transactionModel');
-
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -35,8 +27,9 @@ const DepositWithCard = async (req, res) => {
             return res.status(400).json({ Error: true, Message: "Invalid card details" });
         }
 
-        const amountInKobo = Math.round(parseFloat(amount) * 100);
-        if (amountInKobo < 10000 || amountInKobo > 1000000) {
+        // Convert amount to Naira (keep as decimal, not kobo)
+        const amountInNaira = parseFloat(amount);
+        if (amountInNaira < 100 || amountInNaira > 10000) {
             return res.status(400).json({
                 Error: true,
                 Message: "Amount must be between ₦100 and ₦10,000",
@@ -44,11 +37,15 @@ const DepositWithCard = async (req, res) => {
             });
         }
 
+        // Convert to kobo only for KoraPay API
+        const amountInKobo = Math.round(amountInNaira * 100);
+
         const reference = `SWIFTPAY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
+        // Store amount in Naira in database
         const newTransaction = new transactions({
             userId: user._id,
-            amount: amountInKobo,
+            amount: amountInNaira, // Store in Naira, not kobo
             currency,
             method: 'card',
             type: 'deposit',
@@ -59,7 +56,7 @@ const DepositWithCard = async (req, res) => {
         await newTransaction.save({ session });
 
         const payload = {
-            amount: amountInKobo,
+            amount: amountInKobo, // Send kobo to KoraPay
             currency,
             reference,
             customer: {
@@ -92,15 +89,31 @@ const DepositWithCard = async (req, res) => {
                 }
             }
         );
-        console.log('KoraPay full response', integrateCard?.data); // to see the structure
 
-        // console.log('KoraPay full response', integrateCard?.data?.data?.reference);
+        // Debug the response
+        console.log('=== KORAPAY DEBUG ===');
+        console.log('API Response:', JSON.stringify(integrateCard.data, null, 2));
+        console.log('=== END DEBUG ===');
 
         const chargeData = integrateCard.data?.data;
         const chargeStatus = chargeData?.status;
-        const korapayReference = chargeData?.reference || reference;
+        
+        // Fix: Get KoraPay reference properly
+        let korapayReference = chargeData?.reference;
+        
+        // If no reference from KoraPay, keep our original reference
+        if (!korapayReference) {
+            console.log('No KoraPay reference found, using original reference');
+            korapayReference = reference;
+        }
 
-        await newTransaction.updateOne({ korapayReference }, { session });
+        console.log('Original Reference:', reference);
+        console.log('KoraPay Reference:', korapayReference);
+
+        // Update transaction with KoraPay reference
+        await newTransaction.updateOne({ 
+            korapayReference: korapayReference 
+        }, { session });
 
         if (!integrateCard.data?.status || chargeStatus === 'failed') {
             await newTransaction.updateOne({ status: 'failed' }, { session });
@@ -114,13 +127,13 @@ const DepositWithCard = async (req, res) => {
         }
 
         // Fix: Use correct status value that matches your model
-        const transactionStatus = chargeStatus === 'success' ? 'success' : 'pending';
+        const transactionStatus = chargeStatus === 'success' ? 'successful' : 'pending';
 
         const updateData = {
             $push: {
                 transactions: {
                     type: 'deposit',
-                    amount: amountInKobo / 100,
+                    amount: amountInNaira, // Store in Naira
                     method: 'card',
                     status: transactionStatus,
                     reference: korapayReference,
@@ -141,10 +154,10 @@ const DepositWithCard = async (req, res) => {
         await walletModel.updateOne({ userId: user._id }, updateData, { session });
 
         if (chargeStatus === 'success') {
-            await newTransaction.updateOne({ status: 'success' }, { session });
+            await newTransaction.updateOne({ status: 'successful' }, { session });
             await walletModel.updateOne(
                 { userId: user._id },
-                { $inc: { balance: amountInKobo / 100 } },
+                { $inc: { balance: amountInNaira } }, // Increment in Naira
                 { session }
             );
 
@@ -155,7 +168,7 @@ const DepositWithCard = async (req, res) => {
                 Message: "Payment Successful",
                 Data: {
                     reference: korapayReference,
-                    amount: amountInKobo / 100,
+                    amount: amountInNaira, // Return in Naira
                     currency
                 }
             });
@@ -172,7 +185,7 @@ const DepositWithCard = async (req, res) => {
             Error: false,
             Message: message,
             NextStep: `Enter ${nextStep}`,
-            Reference: korapayReference,
+            Reference: korapayReference, // Return KoraPay reference
             Mode: authMode || "verification"
         });
 
@@ -219,22 +232,25 @@ const submitCardPIN = async (req, res) => {
         );
 
         const data = response.data.data;
-        
-        // Save korapayReference
+        console.log('PIN Response:', JSON.stringify(data, null, 2));
+
+        // Find and update transaction with new KoraPay reference if provided
         const transaction = await transactions.findOne({ 
             $or: [{ reference }, { korapayReference: reference }] 
         });
 
+        let finalReference = reference;
         if (transaction && data.reference && transaction.korapayReference !== data.reference) {
             transaction.korapayReference = data.reference;
             await transaction.save({ session });
+            finalReference = data.reference;
         }
 
         const status = data?.status;
-        const amount = data.amount / 100;
+        const amount = data.amount ? data.amount / 100 : transaction?.amount || 0; // Convert from kobo to Naira
         
         // Fix: Use correct status values
-        const dbStatus = status === 'success' ? 'success' : 'pending';
+        const dbStatus = status === 'success' ? 'successful' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },
@@ -252,7 +268,7 @@ const submitCardPIN = async (req, res) => {
                     "transactions.$.status": dbStatus,
                     "transactions.$.updatedAt": new Date()
                 },
-                ...(status === 'success' && { $inc: { balance: amount } })
+                ...(status === 'success' && { $inc: { balance: amount } }) // Amount already in Naira
             },
             { session }
         );
@@ -264,7 +280,7 @@ const submitCardPIN = async (req, res) => {
                 Error: false,
                 Status: "pending",
                 Message: "PIN accepted. OTP required.",
-                Reference: reference,
+                Reference: finalReference,
                 Mode: "otp"
             });
         }
@@ -273,7 +289,7 @@ const submitCardPIN = async (req, res) => {
             Error: false,
             Status: status,
             Message: status === 'success' ? "Payment Successful" : "Processing payment...",
-            Reference: reference
+            Reference: finalReference
         });
 
     } catch (err) {
@@ -326,22 +342,25 @@ const submitCardOTP = async (req, res) => {
         );
 
         const data = response.data.data;
+        console.log('OTP Response:', JSON.stringify(data, null, 2));
 
-        // Save korapayReference
+        // Find and update transaction with new KoraPay reference if provided
         const transaction = await transactions.findOne({ 
             $or: [{ reference }, { korapayReference: reference }] 
         });
 
+        let finalReference = reference;
         if (transaction && data.reference && transaction.korapayReference !== data.reference) {
             transaction.korapayReference = data.reference;
             await transaction.save({ session });
+            finalReference = data.reference;
         }
 
         const status = data?.status;
-        const amount = data.amount / 100;
+        const amount = data.amount ? data.amount / 100 : transaction?.amount || 0; // Convert from kobo to Naira
         
         // Fix: Use correct status values
-        const dbStatus = status === 'success' ? 'success' : 'pending';
+        const dbStatus = status === 'success' ? 'successful' : 'pending';
 
         await transactions.updateOne(
             { $or: [{ reference }, { korapayReference: reference }] },
@@ -359,7 +378,7 @@ const submitCardOTP = async (req, res) => {
                     "transactions.$.status": dbStatus,
                     "transactions.$.updatedAt": new Date()
                 },
-                ...(status === 'success' && { $inc: { balance: amount } })
+                ...(status === 'success' && { $inc: { balance: amount } }) // Amount already in Naira
             },
             { session }
         );
@@ -370,7 +389,7 @@ const submitCardOTP = async (req, res) => {
             Error: false,
             Status: status,
             Message: status === 'success' ? "Payment Successful" : "Processing payment...",
-            Reference: reference
+            Reference: finalReference
         });
 
     } catch (err) {
