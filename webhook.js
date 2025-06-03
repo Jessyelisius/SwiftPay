@@ -25,7 +25,7 @@ const { Sendmail } = require('./utils/mailer.util');
 
 const verifyWebhookSignature = (payload, signature) => {
   // 1. Get the secret from environment variables
-  const secret = process.env.KORAPAY_WEBHOOK_SECRET;
+  const secret = process.env.korapay_webhook;
   if (!secret) {
       console.error('Korapay webhook secret not configured');
       throw new Error('Webhook secret not configured');

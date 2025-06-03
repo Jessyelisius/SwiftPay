@@ -5,59 +5,77 @@ const {
     handleFailedCharge,
 } = require("./webhook");
 
-// Set test secret (should match your .env in real usage)
-process.env.KORAPAY_WEBHOOK_SECRET = 'your_test_webhook_secret';
+// 1. SET TEST SECRET - Use the same secret as in your .env file
+const TEST_SECRET = 'https://swiftpay-8evb.onrender.com/korapay-webhook'; // REPLACE WITH YOUR ACTUAL SECRET
+process.env.korapay_webhook = TEST_SECRET;
 
-const testSecret = process.env.KORAPAY_WEBHOOK_SECRET;
-
-const fakeData = {
+// 2. TEST DATA
+const testPayload = {
     event: "charge.success",
     data: {
         amount: 600000,
         currency: "NGN",
-        reference: "KPY-CA-wnzzA3KMeBhkUIE",
+        reference: "KPY-TEST-123456",
         status: "success",
-    },
+        customer: {
+            email: "test@example.com",
+            name: "Test User"
+        }
+    }
 };
 
-// Generate a valid signature for testing
-const generateTestSignature = (payload) => {
+// 3. SIGNATURE GENERATOR
+const generateTestSignature = (payload, secret) => {
+    if (!secret) {
+        throw new Error('Webhook secret is required for signature generation');
+    }
     return crypto
-        .createHmac('sha512', testSecret)
+        .createHmac('sha512', secret)
         .update(JSON.stringify(payload))
         .digest('hex');
 };
 
-const testWebhook = async () => {
+// 4. TEST FUNCTION
+const runWebhookTest = async () => {
     try {
-        const testSignature = generateTestSignature(fakeData);
-        
-        const req = {
-            headers: {
-                'x-korapay-signature': `sha512=${testSignature}`,
-            },
-            body: fakeData,
-        };
-
-        const res = {
-            status: (code) => ({
-                json: (data) => {
-                    console.log(`Response ${code}:`, data);
-                    if (code === 200) {
-                        console.log('✅ Webhook test passed!');
-                    } else {
-                        console.log('❌ Webhook test failed');
-                    }
-                },
-            }),
-        };
-
         console.log('Starting webhook test...');
-        await handleKorapayWebhook(req, res);
         
+        // Generate valid signature
+        const validSignature = generateTestSignature(testPayload, TEST_SECRET);
+        
+        // Create mock request
+        const mockRequest = {
+            headers: {
+                'x-korapay-signature': `sha512=${validSignature}`,
+            },
+            body: testPayload
+        };
+
+        // Mock response object
+        const mockResponse = {
+            status: (statusCode) => {
+                console.log(`Response Status: ${statusCode}`);
+                return {
+                    json: (data) => {
+                        console.log('Response Data:', data);
+                        if (statusCode === 200) {
+                            console.log('✅ Webhook test passed successfully!');
+                        } else {
+                            console.log('❌ Webhook test failed');
+                        }
+                    }
+                };
+            }
+        };
+
+        // Execute the webhook handler
+        await handleKorapayWebhook(mockRequest, mockResponse);
+
     } catch (error) {
         console.error('Test failed:', error);
+        process.exit(1);
     }
 };
 
-testWebhook();
+// 5. RUN THE TEST
+runWebhookTest();
