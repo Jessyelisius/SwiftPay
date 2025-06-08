@@ -13,6 +13,8 @@ const DepositWithCard = async (req, res) => {
 
     try {
         const user = req.user;
+        console.log(user);
+        
         if (!user?.isKycVerified) return res.status(403).json({ Error: true, Message: "KYC not verified" });
         if (!user?.isprofileVerified) return res.status(403).json({ Error: true, Message: "Profile not verified" });
 

@@ -52,30 +52,10 @@ const verifyWebhookSignature = (payload, signature) => {
 
 const handleKorapayWebhook = async (req, res) => {
     try {
-        const signature = req.headers['x-korapay-signature'];
-        
-        if (!signature) {
-            console.log('Missing webhook signature');
-            return res.status(401).json({ 
-                Error: true,
-                Message: "Missing webhook signature" 
-            });
-        }
+        const hash = crypto.createHmac('sha256', process.env.kora_api_secret).update(JSON.stringify(req.body.data)).digest('hex')
 
-        const rawBody = JSON.stringify(req.body);
-        const isValid = verifyWebhookSignature(rawBody, signature);
-        
-        if (!isValid) {
-            console.log('Invalid webhook signature');
-            return res.status(401).json({ 
-                Error: true,
-                Message: "Invalid webhook signature" 
-            });
-        }
-
-        console.log('🔥 Korapay Webhook Received:', req.body);
-
-        const webhookData = req.body;
+   if (hash === req.headers['x-korapay-signature']){
+    const webhookData = req.body;
         console.log('Webhook received:', JSON.stringify(webhookData, null, 2));
         
         if (webhookData.event === "charge.success") {
@@ -87,6 +67,13 @@ const handleKorapayWebhook = async (req, res) => {
         }
     
         return res.status(200).json({ received: true });
+     // Continue with the request functionality
+   } else {
+    return res.status(400).json({ received: false, });
+
+     // Don’t do anything, the request is not from us.
+   }
+        
 
     } catch (error) {
         console.error('Webhook error:', error);
