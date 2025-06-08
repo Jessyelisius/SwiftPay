@@ -109,7 +109,7 @@ const handleSuccessfulCharge = async (data) => {
         }
 
         // Check if transaction is already processed
-        if (transaction.status === 'successful') {
+        if (transaction.status === 'success') {
             console.log(`Transaction ${reference} already processed successfully`);
             await session.commitTransaction();
             return;
@@ -119,7 +119,7 @@ const handleSuccessfulCharge = async (data) => {
         await transactions.updateOne(
             { _id: transaction._id },
             { 
-                status: 'successful',  // Changed from 'success' to 'successful'
+                status:'success',  // Changed from 'success' to 'successful'
                 updatedAt: new Date()
             },
             { session }
@@ -136,7 +136,7 @@ const handleSuccessfulCharge = async (data) => {
             },
             {
                 $set: {
-                    "transactions.$.status": "successful",  // Changed to match model
+                    "transactions.$.status": "success",  // Changed to match model
                     "transactions.$.updatedAt": new Date()
                 },
                 $inc: { balance: amountInNaira }
@@ -156,7 +156,7 @@ const handleSuccessfulCharge = async (data) => {
                             type: 'deposit',
                             amount: amountInNaira,
                             method: 'card',
-                            status: 'successful',  // Changed to match model
+                            status: 'success',  // Changed to match model
                             reference: reference,
                             currency: currency || 'NGN',
                             createdAt: new Date(),
@@ -177,7 +177,7 @@ const handleSuccessfulCharge = async (data) => {
             method: 'card',
             amount: amountInNaira,
             currency: currency || 'NGN',
-            status: 'successful',  // Changed to match model
+            status: 'success',  // Changed to match model
             reference: reference,
             korapayReference: reference,
             description: `Card deposit - ${reference}`,
