@@ -17,7 +17,7 @@ const submitKYC = async (req, res) => {
         const user = await userModel.findById(req.user.id);
         if (!user) return res.status(404).json({ Error: true, Message: "User not found" });
 
-        if (!user.isprofileVerified) {
+        if (!user?.isprofileVerified) {
             return res.status(400).json({ Error: true, Message: "Please complete your profile before going for KYC" });
         }
 
