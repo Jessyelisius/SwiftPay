@@ -8,7 +8,7 @@ const { handleKorapayWebhook } = require("../../webhook");
 
 router.post(
   "/",
-  express.raw({ type: "application/json" }), // Important: Raw body for HMAC signature verification
+  // express.raw({ type: "application/json" }), // Important: Raw body for HMAC signature verification
   handleKorapayWebhook
 );
 

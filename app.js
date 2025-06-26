@@ -26,7 +26,7 @@ app.use(
 // kkkkkkk
 
 /////////////////////////webhook route///////////////////////////////
-app.use("/korapay-webhook", require("./routes/walletRoute/webhook"));
+app.use("/korapay-webhook", express.raw({ type: 'application/json' }), require("./routes/walletRoute/webhook"));
 
 
 ///google route implementation///////////////
