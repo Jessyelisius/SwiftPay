@@ -112,12 +112,13 @@ const handleKorapayWebhook = async (req, res) => {
 
 const handleSuccessfulCharge = async (data) => {
     const session = await mongoose.startSession();
+    let webhookReference; // Declare here to make it accessible throughout the function
     
     try {
         // Use MongoDB transaction with proper error handling
         await session.withTransaction(async () => {
             const { reference, payment_reference, amount, currency } = data;
-            const webhookReference = reference || payment_reference;
+            webhookReference = reference || payment_reference; // Assign here
             const amountInNaira = amount / 100;
 
             console.log(`Processing successful charge: ${webhookReference}, Amount: ₦${amountInNaira}`);
@@ -175,6 +176,7 @@ const handleSuccessfulCharge = async (data) => {
         });
 
         // Send email outside of transaction to avoid blocking
+        // Now webhookReference is accessible here
         await sendSuccessEmail(data, webhookReference);
 
     } catch (error) {
