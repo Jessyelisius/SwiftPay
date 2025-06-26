@@ -50,6 +50,7 @@ const withRetry = async (operation, maxRetries = MAX_RETRIES) => {
     throw lastError;
 };
 
+// FIXED: Consistent signature verification using SHA512
 const verifyWebhookSignature = (payload, signature) => {
     const secret = process.env.kora_api_secret;
     if (!secret) {
@@ -72,14 +73,14 @@ const verifyWebhookSignature = (payload, signature) => {
     );
 };
 
+// FIXED: Main webhook handler with improved idempotency
 const handleKorapayWebhook = async (req, res) => {
     try {
-        // Improved signature verification
-        const hash = crypto.createHmac('sha256', process.env.kora_api_secret)
-            .update(JSON.stringify(req.body.data))
-            .digest('hex');
-
-        if (hash !== req.headers['x-korapay-signature']) {
+        // Use consistent signature verification
+        const rawPayload = JSON.stringify(req.body);
+        const signature = req.headers['x-korapay-signature'];
+        
+        if (!verifyWebhookSignature(rawPayload, signature)) {
             console.log('Invalid webhook signature');
             return res.status(400).json({ received: false, error: 'Invalid signature' });
         }
@@ -87,12 +88,25 @@ const handleKorapayWebhook = async (req, res) => {
         const webhookData = req.body;
         console.log('Webhook received:', JSON.stringify(webhookData, null, 2));
         
+        // Add idempotency check at webhook level
+        const webhookId = webhookData.id || webhookData.event_id;
+        if (webhookId) {
+            const existingWebhook = await AdminTransaction.findOne({
+                'metadata.webhookId': webhookId
+            });
+            
+            if (existingWebhook) {
+                console.log(`Webhook already processed: ${webhookId}`);
+                return res.status(200).json({ received: true, message: 'Already processed' });
+            }
+        }
+        
         // Process webhook with retry logic
         await withRetry(async () => {
             if (webhookData.event === "charge.success") {
-                await handleSuccessfulCharge(webhookData.data);
+                await handleSuccessfulCharge(webhookData.data, webhookId);
             } else if (webhookData.event === "charge.failed") {
-                await handleFailedCharge(webhookData.data);
+                await handleFailedCharge(webhookData.data, webhookId);
             } else {
                 console.log(`Unhandled event type: ${webhookData.event}`);
             }
@@ -110,26 +124,24 @@ const handleKorapayWebhook = async (req, res) => {
     }
 };
 
-const handleSuccessfulCharge = async (data) => {
+// FIXED: Improved successful charge handler
+const handleSuccessfulCharge = async (data, webhookId = null) => {
     const session = await mongoose.startSession();
-    let webhookReference; // Declare here to make it accessible throughout the function
+    let webhookReference;
     
     try {
-        // Use MongoDB transaction with proper error handling
         await session.withTransaction(async () => {
             const { reference, payment_reference, amount, currency } = data;
-            webhookReference = reference || payment_reference; // Assign here
+            webhookReference = reference || payment_reference;
             const amountInNaira = amount / 100;
 
             console.log(`Processing successful charge: ${webhookReference}, Amount: ₦${amountInNaira}`);
 
-            // Find transaction with proper session handling
+            // FIXED: Simplified transaction lookup to avoid duplicates
             const transaction = await transactions.findOne({
                 $or: [
                     { reference: webhookReference },
-                    { korapayReference: webhookReference },
-                    { reference: reference },
-                    { reference: payment_reference }
+                    { korapayReference: webhookReference }
                 ]
             }).populate('userId', 'Email FullName FirstName').session(session);
 
@@ -144,7 +156,7 @@ const handleSuccessfulCharge = async (data) => {
                 reference: transaction.reference
             });
 
-            // Idempotency check - but still process wallet/admin if needed
+            // Check if transaction is already processed
             const isAlreadyProcessed = transaction.status === 'success';
             
             if (!isAlreadyProcessed) {
@@ -165,7 +177,7 @@ const handleSuccessfulCharge = async (data) => {
             await handleWalletOperation(transaction, webhookReference, amountInNaira, currency, session, isAlreadyProcessed);
 
             // Handle admin transaction
-            await handleAdminTransaction(transaction, webhookReference, amountInNaira, currency, session);
+            await handleAdminTransaction(transaction, webhookReference, amountInNaira, currency, session, webhookId);
 
             console.log(`Successfully processed: ${webhookReference}, Amount: ₦${amountInNaira}`);
 
@@ -176,7 +188,6 @@ const handleSuccessfulCharge = async (data) => {
         });
 
         // Send email outside of transaction to avoid blocking
-        // Now webhookReference is accessible here
         await sendSuccessEmail(data, webhookReference);
 
     } catch (error) {
@@ -187,6 +198,7 @@ const handleSuccessfulCharge = async (data) => {
     }
 };
 
+// FIXED: Improved wallet operation with better balance handling
 const handleWalletOperation = async (transaction, webhookReference, amountInNaira, currency, session, isAlreadyProcessed) => {
     try {
         // Use findOneAndUpdate for atomic operations
@@ -214,20 +226,18 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
             return;
         }
 
-        // Check if wallet transaction exists
+        // FIXED: More precise wallet transaction lookup
         const existingWalletTx = walletRecord.transactions?.find(tx => 
-            tx.reference === webhookReference || 
-            tx.reference === transaction.reference ||
-            tx.reference === transaction.korapayReference
+            tx.reference === webhookReference
         );
 
         if (existingWalletTx && existingWalletTx.status === 'success') {
             console.log(`Wallet transaction already successful: ${existingWalletTx.reference}`);
-            return;
+            return; // Don't process again
         }
 
         if (existingWalletTx) {
-            // Update existing transaction
+            // Update existing transaction - DON'T increment balance if already processed
             await walletModel.updateOne(
                 { 
                     userId: transaction.userId._id,
@@ -237,34 +247,42 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     $set: {
                         "transactions.$.status": "success",
                         "transactions.$.updatedAt": new Date()
-                    },
-                    ...(!isAlreadyProcessed && { $inc: { balance: amountInNaira } })
+                    }
+                    // REMOVED: Balance increment here since it should only happen once
                 },
                 { session }
             );
-            console.log(`Updated existing wallet transaction`);
+            console.log(`Updated existing wallet transaction without balance change`);
         } else {
-            // Create new wallet transaction
+            // FIXED: Only increment balance for genuinely new transactions
+            const balanceIncrement = isAlreadyProcessed ? 0 : amountInNaira;
+            
+            const updateOperation = {
+                $push: {
+                    transactions: {
+                        type: 'deposit',
+                        amount: amountInNaira,
+                        method: 'card',
+                        status: 'success',
+                        reference: webhookReference,
+                        currency: currency || 'NGN',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }
+                }
+            };
+
+            // Only increment balance if not already processed
+            if (balanceIncrement > 0) {
+                updateOperation.$inc = { balance: balanceIncrement };
+            }
+
             await walletModel.updateOne(
                 { userId: transaction.userId._id },
-                {
-                    $push: {
-                        transactions: {
-                            type: 'deposit',
-                            amount: amountInNaira,
-                            method: 'card',
-                            status: 'success',
-                            reference: webhookReference,
-                            currency: currency || 'NGN',
-                            createdAt: new Date(),
-                            updatedAt: new Date()
-                        }
-                    },
-                    $inc: { balance: amountInNaira }
-                },
+                updateOperation,
                 { session }
             );
-            console.log(`Created new wallet transaction`);
+            console.log(`Created new wallet transaction, balance incremented by: ${balanceIncrement}`);
         }
     } catch (error) {
         console.error('Wallet operation error:', error);
@@ -272,14 +290,16 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
     }
 };
 
-const handleAdminTransaction = async (transaction, webhookReference, amountInNaira, currency, session) => {
+// FIXED: Improved admin transaction with webhookId tracking
+const handleAdminTransaction = async (transaction, webhookReference, amountInNaira, currency, session, webhookId = null) => {
     try {
         // Check if admin transaction already exists
         const existingAdminTx = await AdminTransaction.findOne({
             $or: [
                 { reference: webhookReference },
                 { korapayReference: webhookReference },
-                { transactionId: transaction._id }
+                { transactionId: transaction._id },
+                ...(webhookId ? [{ 'metadata.webhookId': webhookId }] : [])
             ]
         }).session(session);
 
@@ -304,7 +324,8 @@ const handleAdminTransaction = async (transaction, webhookReference, amountInNai
                 paymentGateway: 'korapay',
                 originalAmount: amountInNaira * 100,
                 processedVia: 'webhook',
-                webhookProcessedAt: new Date()
+                webhookProcessedAt: new Date(),
+                ...(webhookId && { webhookId })
             }
         }], { session });
 
@@ -315,6 +336,7 @@ const handleAdminTransaction = async (transaction, webhookReference, amountInNai
     }
 };
 
+// Improved success email function
 const sendSuccessEmail = async (data, webhookReference) => {
     try {
         const { amount, currency } = data;
@@ -389,7 +411,8 @@ const sendSuccessEmail = async (data, webhookReference) => {
     }
 };
 
-const handleFailedCharge = async (data) => {
+// FIXED: Improved failed charge handler
+const handleFailedCharge = async (data, webhookId = null) => {
     const session = await mongoose.startSession();
     
     try {
@@ -428,14 +451,11 @@ const handleFailedCharge = async (data) => {
                 { session }
             );
 
-            // Update wallet transaction
+            // Update wallet transaction if exists
             await walletModel.updateOne(
                 { 
                     userId: transaction.userId._id,
-                    $or: [
-                        { "transactions.reference": reference },
-                        { "transactions.reference": transaction.reference }
-                    ]
+                    "transactions.reference": reference
                 },
                 {
                     $set: {
@@ -447,7 +467,7 @@ const handleFailedCharge = async (data) => {
                 { session }
             );
 
-            // Create admin transaction
+            // Create admin transaction with improved metadata
             await AdminTransaction.create([{
                 userId: transaction.userId._id,
                 transactionId: transaction._id,
@@ -464,11 +484,17 @@ const handleFailedCharge = async (data) => {
                     paymentGateway: 'korapay',
                     originalAmount: amount || transaction.amount,
                     processedVia: 'webhook',
-                    failureDetails: reason
+                    failureDetails: reason,
+                    webhookProcessedAt: new Date(),
+                    ...(webhookId && { webhookId })
                 }
             }], { session });
 
             console.log(`Successfully processed failed charge: ${reference}`);
+        }, {
+            readConcern: { level: 'majority' },
+            writeConcern: { w: 'majority' },
+            readPreference: 'primary'
         });
 
         // Send failure email outside transaction
@@ -482,6 +508,7 @@ const handleFailedCharge = async (data) => {
     }
 };
 
+// Improved failure email function
 const sendFailureEmail = async (data) => {
     try {
         const { reference, reason, amount, currency } = data;
@@ -551,5 +578,6 @@ module.exports = {
     handleKorapayWebhook,
     handleSuccessfulCharge,
     handleFailedCharge,
-    withRetry
+    withRetry,
+    verifyWebhookSignature
 };
