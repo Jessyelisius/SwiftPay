@@ -87,18 +87,26 @@ const handleKorapayWebhook = async (req, res) => {
         //     console.log('Invalid webhook signature');
         //     return res.status(400).json({ received: false, error: 'Invalid signature' });
         // }
+         const korapaySecret = process.env.kora_api_secret;
+        const korapaySignature = req.headers['x-korapay-signature'];
 
-            const rawBody = JSON.stringify(req.body); // Whole body!
-            const signature = req.headers['x-korapay-signature'];
+        if (!korapaySecret || !korapaySignature) {
+            console.log('❌ Missing webhook secret or signature');
+            return res.status(400).json({ received: false, error: 'Missing signature' });
+        }
 
-            const computedHash = crypto.createHmac('sha512', process.env.kora_api_secret)
-                .update(rawBody)
-                .digest('hex');
+        // ✅ Hash only the `data` field using SHA-256
+        const payload = JSON.stringify(req.body.data);
+        const computedSignature = crypto
+            .createHmac('sha256', korapaySecret)
+            .update(payload)
+            .digest('hex');
 
-            if (!signature || computedHash !== signature) {
-                console.log('Invalid webhook signature');
-                return res.status(400).json({ received: false, error: 'Invalid signature' });
-            }
+        if (computedSignature !== korapaySignature) {
+            console.log('❌ Invalid webhook signature');
+            return res.status(400).json({ received: false, error: 'Invalid signature' });
+        }
+
 
         const webhookData = req.body;
         console.log('Webhook received:', JSON.stringify(webhookData, null, 2));
