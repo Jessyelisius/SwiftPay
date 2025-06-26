@@ -425,6 +425,9 @@ const DepositWithCard = async (req, res) => {
 };
 
 
+// FIXED: Remove balance updates from PIN/OTP handlers
+// Only update transaction status, let webhook handle balance updates
+
 const submitCardPIN = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -469,9 +472,9 @@ const submitCardPIN = async (req, res) => {
         }
 
         const status = data?.status;
-        const amount = data.amount ? data.amount / 100 : transaction?.amount || 0; // Convert from kobo to Naira
         
-        // Fix: Use correct status values
+        // FIXED: Only update transaction status, don't touch balance
+        // Let webhook handle balance updates to avoid double processing
         const dbStatus = status === 'success' ? 'success' : 'pending';
 
         await transactions.updateOne(
@@ -483,14 +486,15 @@ const submitCardPIN = async (req, res) => {
             { session }
         );
 
+        // FIXED: Only update wallet transaction status, NOT balance
         await walletModel.updateOne(
             { "transactions.reference": reference },
             {
                 $set: {
                     "transactions.$.status": dbStatus,
                     "transactions.$.updatedAt": new Date()
-                },
-                ...(status === 'success' && { $inc: { balance: amount } }) // Amount already in Naira
+                }
+                // REMOVED: Balance increment - webhook will handle this
             },
             { session }
         );
@@ -510,7 +514,7 @@ const submitCardPIN = async (req, res) => {
         return res.status(200).json({
             Error: false,
             Status: status,
-            Message: status === 'success' ? "Payment Successful" : "Processing payment...",
+            Message: status === 'success' ? "Payment Successful - Processing..." : "Processing payment...",
             Reference: finalReference
         });
 
@@ -534,7 +538,7 @@ const submitCardPIN = async (req, res) => {
     }
 };
 
-// POST /api/card/otp
+// FIXED: Same fix for OTP handler
 const submitCardOTP = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -579,9 +583,8 @@ const submitCardOTP = async (req, res) => {
         }
 
         const status = data?.status;
-        const amount = data.amount ? data.amount / 100 : transaction?.amount || 0; // Convert from kobo to Naira
         
-        // Fix: Use correct status values
+        // FIXED: Only update transaction status
         const dbStatus = status === 'success' ? 'success' : 'pending';
 
         await transactions.updateOne(
@@ -593,14 +596,15 @@ const submitCardOTP = async (req, res) => {
             { session }
         );
 
+        // FIXED: Only update wallet transaction status, NOT balance
         await walletModel.updateOne(
             { "transactions.reference": reference },
             {
                 $set: {
                     "transactions.$.status": dbStatus,
                     "transactions.$.updatedAt": new Date()
-                },
-                ...(status === 'success' && { $inc: { balance: amount } }) // Amount already in Naira
+                }
+                // REMOVED: Balance increment - webhook will handle this
             },
             { session }
         );
@@ -610,7 +614,7 @@ const submitCardOTP = async (req, res) => {
         return res.status(200).json({
             Error: false,
             Status: status,
-            Message: status === 'success' ? "Payment Successful" : "Processing payment...",
+            Message: status === 'success' ? "Payment Successful - Processing..." : "Processing payment...",
             Reference: finalReference
         });
 

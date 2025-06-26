@@ -156,9 +156,10 @@ const handleSuccessfulCharge = async (data, webhookId = null) => {
         await session.withTransaction(async () => {
             const { reference, payment_reference, amount, currency } = data;
             webhookReference = reference || payment_reference;
-            const amountInNaira = amount / 100;
-
-            console.log(`Processing successful charge: ${webhookReference}, Amount: ₦${amountInNaira}`);
+            
+            // FIXED: Use the amount from your transaction record, not from webhook
+            // This ensures consistency since you store amounts in Naira
+            console.log(`Processing successful charge: ${webhookReference}`);
 
             // FIXED: Simplified transaction lookup to avoid duplicates
             const transaction = await transactions.findOne({
@@ -173,11 +174,9 @@ const handleSuccessfulCharge = async (data, webhookId = null) => {
                 throw new Error(`Transaction not found: ${webhookReference}`);
             }
 
-            console.log(`Found transaction:`, {
-                id: transaction._id,
-                status: transaction.status,
-                reference: transaction.reference
-            });
+            // FIXED: Use the amount from your transaction record (already in Naira)
+            const amountInNaira = transaction.amount;
+            console.log(`Found transaction: ${transaction._id}, Amount: ₦${amountInNaira}, Current Status: ${transaction.status}`);
 
             // Check if transaction is already processed
             const isAlreadyProcessed = transaction.status === 'success';
@@ -194,6 +193,8 @@ const handleSuccessfulCharge = async (data, webhookId = null) => {
                     { session }
                 );
                 console.log(`Updated transaction ${transaction._id} status to success`);
+            } else {
+                console.log(`Transaction ${transaction._id} already successful, skipping status update`);
             }
 
             // Handle wallet operations with better error handling
@@ -249,9 +250,11 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
             return;
         }
 
-        // FIXED: More precise wallet transaction lookup
+        // FIXED: More precise wallet transaction lookup using both references
         const existingWalletTx = walletRecord.transactions?.find(tx => 
-            tx.reference === webhookReference
+            tx.reference === webhookReference || 
+            tx.reference === transaction.reference ||
+            tx.reference === transaction.korapayReference
         );
 
         if (existingWalletTx && existingWalletTx.status === 'success') {
@@ -260,25 +263,40 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
         }
 
         if (existingWalletTx) {
-            // Update existing transaction - DON'T increment balance if already processed
+            // Update existing transaction
+            // FIXED: Only increment balance if the existing transaction was not already successful
+            const shouldIncrementBalance = existingWalletTx.status !== 'success';
+            
+            const updateOperation = {
+                $set: {
+                    "transactions.$.status": "success",
+                    "transactions.$.reference": webhookReference, // Update with webhook reference
+                    "transactions.$.updatedAt": new Date()
+                }
+            };
+
+            // Only increment balance if transaction wasn't previously successful
+            if (shouldIncrementBalance) {
+                updateOperation.$inc = { balance: amountInNaira };
+                console.log(`Incrementing balance by: ₦${amountInNaira}`);
+            } else {
+                console.log(`Transaction already successful, not incrementing balance`);
+            }
+
             await walletModel.updateOne(
                 { 
                     userId: transaction.userId._id,
                     "transactions._id": existingWalletTx._id
                 },
-                {
-                    $set: {
-                        "transactions.$.status": "success",
-                        "transactions.$.updatedAt": new Date()
-                    }
-                    // REMOVED: Balance increment here since it should only happen once
-                },
+                updateOperation,
                 { session }
             );
-            console.log(`Updated existing wallet transaction without balance change`);
+            
+            console.log(`Updated existing wallet transaction`);
         } else {
-            // FIXED: Only increment balance for genuinely new transactions
-            const balanceIncrement = isAlreadyProcessed ? 0 : amountInNaira;
+            // FIXED: Check if balance should be incremented based on main transaction status
+            // If main transaction was already successful, don't increment balance
+            const shouldIncrementBalance = !isAlreadyProcessed;
             
             const updateOperation = {
                 $push: {
@@ -295,9 +313,12 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                 }
             };
 
-            // Only increment balance if not already processed
-            if (balanceIncrement > 0) {
-                updateOperation.$inc = { balance: balanceIncrement };
+            // Only increment balance if this is genuinely a new successful transaction
+            if (shouldIncrementBalance) {
+                updateOperation.$inc = { balance: amountInNaira };
+                console.log(`Creating new wallet transaction, incrementing balance by: ₦${amountInNaira}`);
+            } else {
+                console.log(`Transaction already processed, not incrementing balance`);
             }
 
             await walletModel.updateOne(
@@ -305,8 +326,14 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                 updateOperation,
                 { session }
             );
-            console.log(`Created new wallet transaction, balance incremented by: ${balanceIncrement}`);
         }
+
+        // FIXED: Log final balance for debugging
+        const updatedWallet = await walletModel.findOne({
+            userId: transaction.userId._id
+        }).session(session);
+        console.log(`Final wallet balance for user ${transaction.userId._id}: ₦${updatedWallet.balance}`);
+        
     } catch (error) {
         console.error('Wallet operation error:', error);
         throw error;
