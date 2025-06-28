@@ -97,7 +97,7 @@ const handleKorapayWebhook = async (req, res) => {
         });
         
         if (existingAdminTx) {
-            console.log(`Webhook event already processed: ${webhookData.event} for ${transactionReference}`);
+            console.log(`✅ Webhook event already processed: ${webhookData.event} for ${transactionReference}`);
             return res.status(200).json({ received: true, message: 'Already processed' });
         }
         
@@ -124,7 +124,7 @@ const handleKorapayWebhook = async (req, res) => {
     }
 };
 
-// FIXED: Improved successful charge handler with better idempotency
+// FIXED: Proper idempotency - check EVERYTHING at the start
 const handleSuccessfulCharge = async (data, webhookEvent = null) => {
     const session = await mongoose.startSession();
     let webhookReference;
@@ -152,7 +152,7 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
             const amountInNaira = transaction.amount;
             console.log(`Found transaction: ${transaction._id}, Amount: ₦${amountInNaira}, Current Status: ${transaction.status}`);
 
-            // FIXED: Check if admin transaction already exists for this specific webhook event
+            // ✅ EARLY EXIT: Check if this exact webhook event was already processed
             const existingAdminTx = await AdminTransaction.findOne({
                 $and: [
                     { transactionId: transaction._id },
@@ -162,14 +162,14 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
             }).session(session);
 
             if (existingAdminTx) {
-                console.log(`Admin transaction already exists for this webhook event: ${existingAdminTx._id}`);
-                return; // Exit early - already processed
+                console.log(`⏭️ SKIPPING: Admin transaction already exists for webhook event: ${webhookEvent}`);
+                return; // EXIT EARLY - don't do anything else
             }
 
-            // Check if this is the first successful processing
+            // ✅ DETERMINE if this is the first success (for wallet operations)
             const isFirstSuccess = transaction.status !== 'success';
             
-            // Update main transaction status if not already successful
+            // Only update main transaction if it's not already successful
             if (isFirstSuccess) {
                 await transactions.updateOne(
                     { _id: transaction._id },
@@ -180,15 +180,20 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
                     },
                     { session }
                 );
-                console.log(`Updated transaction ${transaction._id} status to success`);
+                console.log(`✅ Updated transaction ${transaction._id} status to success`);
             } else {
-                console.log(`Transaction ${transaction._id} already successful`);
+                console.log(`⏭️ Transaction ${transaction._id} already successful - skipping status update`);
             }
 
-            // Handle wallet operations - only increment balance on first success
-            await handleWalletOperation(transaction, webhookReference, amountInNaira, currency, session, !isFirstSuccess);
+            // ✅ Handle wallet operations - only if first success
+            if (isFirstSuccess) {
+                await handleWalletOperation(transaction, webhookReference, amountInNaira, currency, session);
+                console.log(`✅ Wallet operations completed for first success`);
+            } else {
+                console.log(`⏭️ Skipping wallet operations - not first success`);
+            }
 
-            // Always create admin transaction for webhook tracking
+            // ✅ ALWAYS create admin transaction for webhook tracking (this is our idempotency key)
             await handleAdminTransaction(transaction, webhookReference, amountInNaira, currency, session, webhookEvent);
 
             console.log(`✅ Successfully processed: ${webhookReference}, Amount: ₦${amountInNaira}`);
@@ -199,7 +204,7 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
             readPreference: 'primary'
         });
 
-        // Send email outside of transaction (only if this is the first success)
+        // Send email outside of transaction (only for first success)
         const finalTransaction = await transactions.findOne({
             $or: [
                 { reference: webhookReference },
@@ -219,14 +224,9 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
     }
 };
 
-// FIXED: Simplified wallet operation
-const handleWalletOperation = async (transaction, webhookReference, amountInNaira, currency, session, skipBalanceUpdate) => {
+// ✅ SIMPLIFIED: Remove the skipBalanceUpdate parameter - just do wallet ops
+const handleWalletOperation = async (transaction, webhookReference, amountInNaira, currency, session) => {
     try {
-        if (skipBalanceUpdate) {
-            console.log(`⏭Skipping balance update - transaction already processed`);
-            return;
-        }
-
         // Find or create wallet
         let walletRecord = await walletModel.findOne({
             userId: transaction.userId._id
@@ -250,6 +250,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     updatedAt: new Date()
                 }]
             }], { session });
+            console.log(`✅ Created new wallet with balance: ₦${amountInNaira}`);
         } else {
             // Check if wallet transaction already exists
             const existingWalletTx = walletRecord.transactions?.find(tx => 
@@ -258,7 +259,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
             );
 
             if (existingWalletTx && existingWalletTx.status === 'success') {
-                console.log(`Wallet transaction already successful: ${existingWalletTx.reference}`);
+                console.log(`⚠️ Wallet transaction already successful: ${existingWalletTx.reference}`);
                 return;
             }
 
@@ -279,7 +280,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     },
                     { session }
                 );
-                console.log(`Updated existing wallet transaction and incremented balance by: ₦${amountInNaira}`);
+                console.log(`✅ Updated existing wallet transaction and incremented balance by: ₦${amountInNaira}`);
             } else {
                 // Create new wallet transaction and increment balance
                 await walletModel.updateOne(
@@ -302,7 +303,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     },
                     { session }
                 );
-                console.log(`Created new wallet transaction and incremented balance by: ₦${amountInNaira}`);
+                console.log(`✅ Created new wallet transaction and incremented balance by: ₦${amountInNaira}`);
             }
         }
 
@@ -318,7 +319,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
     }
 };
 
-// FIXED: Improved admin transaction with webhook event tracking
+// ✅ This creates the admin transaction (our idempotency key)
 const handleAdminTransaction = async (transaction, webhookReference, amountInNaira, currency, session, webhookEvent = null) => {
     try {
         // Create admin transaction with webhook event tracking
@@ -338,7 +339,7 @@ const handleAdminTransaction = async (transaction, webhookReference, amountInNai
                 originalAmount: amountInNaira * 100,
                 processedVia: 'webhook',
                 webhookProcessedAt: new Date(),
-                webhookEvent: webhookEvent, // Track which webhook event this was
+                webhookEvent: webhookEvent, // This is our idempotency key
                 processingId: `${webhookEvent}-${webhookReference}-${Date.now()}` // Unique processing ID
             }
         }], { session });
@@ -426,7 +427,7 @@ const sendSuccessEmail = async (data, webhookReference) => {
 };
 
 // FIXED: Improved failed charge handler
-const handleFailedCharge = async (data, webhookId = null) => {
+const handleFailedCharge = async (data, webhookEvent = null) => {
     const session = await mongoose.startSession();
     
     try {
@@ -448,22 +449,33 @@ const handleFailedCharge = async (data, webhookId = null) => {
                 throw new Error(`Transaction not found: ${reference}`);
             }
 
-            // Idempotency check
-            if (transaction.status === 'failed') {
-                console.log(`Transaction ${reference} already marked as failed`);
+            // ✅ EARLY EXIT: Check if this webhook event was already processed
+            const existingAdminTx = await AdminTransaction.findOne({
+                $and: [
+                    { transactionId: transaction._id },
+                    { 'metadata.webhookEvent': webhookEvent },
+                    { status: 'failed' }
+                ]
+            }).session(session);
+
+            if (existingAdminTx) {
+                console.log(`⏭️ SKIPPING: Failed webhook already processed for: ${reference}`);
                 return;
             }
 
-            // Update main transaction
-            await transactions.updateOne(
-                { _id: transaction._id },
-                { 
-                    status: 'failed',
-                    failureReason: reason,
-                    updatedAt: new Date()
-                },
-                { session }
-            );
+            // Update main transaction if not already failed
+            if (transaction.status !== 'failed') {
+                await transactions.updateOne(
+                    { _id: transaction._id },
+                    { 
+                        status: 'failed',
+                        failureReason: reason,
+                        updatedAt: new Date()
+                    },
+                    { session }
+                );
+                console.log(`✅ Updated transaction ${transaction._id} status to failed`);
+            }
 
             // Update wallet transaction if exists
             await walletModel.updateOne(
@@ -500,11 +512,11 @@ const handleFailedCharge = async (data, webhookId = null) => {
                     processedVia: 'webhook',
                     failureDetails: reason,
                     webhookProcessedAt: new Date(),
-                    ...(webhookId && { webhookId })
+                    webhookEvent: webhookEvent // Idempotency key
                 }
             }], { session });
 
-            console.log(`Successfully processed failed charge: ${reference}`);
+            console.log(`✅ Successfully processed failed charge: ${reference}`);
         }, {
             readConcern: { level: 'majority' },
             writeConcern: { w: 'majority' },
