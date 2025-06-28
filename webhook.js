@@ -142,7 +142,7 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
                     { reference: webhookReference },
                     { korapayReference: webhookReference }
                 ]
-            }).populate('userId', 'Email FullName FirstName').session(session);
+            }).populate('userId', 'Email FirstName').session(session);
 
             if (!transaction) {
                 console.log(`Transaction not found for reference: ${webhookReference}`);
@@ -181,7 +181,7 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
             const shouldUpdateWallet = !walletHasSuccessfulTx;
             const shouldUpdateTransaction = transaction.status !== 'success';
             
-            console.log(`🔍 Wallet check - Has successful tx: ${walletHasSuccessfulTx}, Should update wallet: ${shouldUpdateWallet}`);
+            console.log(`Wallet check - Has successful tx: ${walletHasSuccessfulTx}, Should update wallet: ${shouldUpdateWallet}`);
             
             // Update main transaction if not already successful
             if (shouldUpdateTransaction) {
@@ -194,23 +194,23 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
                     },
                     { session }
                 );
-                console.log(`✅ Updated transaction ${transaction._id} status to success`);
+                console.log(`Updated transaction ${transaction._id} status to success`);
             } else {
-                console.log(`⏭️ Transaction ${transaction._id} already successful - skipping status update`);
+                console.log(`Transaction ${transaction._id} already successful - skipping status update`);
             }
 
             // ✅ Handle wallet operations - based on wallet state, not transaction state
             if (shouldUpdateWallet) {
                 await handleWalletOperation(transaction, webhookReference, amountInNaira, currency, session);
-                console.log(`✅ Wallet operations completed - balance updated`);
+                console.log(`Wallet operations completed - balance updated`);
             } else {
-                console.log(`⏭️ Skipping wallet operations - wallet already has successful transaction`);
+                console.log(`Skipping wallet operations - wallet already has successful transaction`);
             }
 
             // ✅ ALWAYS create admin transaction for webhook tracking (this is our idempotency key)
             await handleAdminTransaction(transaction, webhookReference, amountInNaira, currency, session, webhookEvent);
 
-            console.log(`✅ Successfully processed: ${webhookReference}, Amount: ₦${amountInNaira}`);
+            console.log(`Successfully processed: ${webhookReference}, Amount: ₦${amountInNaira}`);
 
         }, {
             readConcern: { level: 'majority' },
@@ -264,7 +264,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     updatedAt: new Date()
                 }]
             }], { session });
-            console.log(`✅ Created new wallet with balance: ₦${amountInNaira}`);
+            console.log(`Created new wallet with balance: ₦${amountInNaira}`);
         } else {
             // Check if wallet transaction already exists
             const existingWalletTx = walletRecord.transactions?.find(tx => 
@@ -273,7 +273,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
             );
 
             if (existingWalletTx && existingWalletTx.status === 'success') {
-                console.log(`⚠️ Wallet transaction already successful: ${existingWalletTx.reference}`);
+                console.log(`Wallet transaction already successful: ${existingWalletTx.reference}`);
                 return;
             }
 
@@ -294,7 +294,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     },
                     { session }
                 );
-                console.log(`✅ Updated existing wallet transaction and incremented balance by: ₦${amountInNaira}`);
+                console.log(`Updated existing wallet transaction and incremented balance by: ₦${amountInNaira}`);
             } else {
                 // Create new wallet transaction and increment balance
                 await walletModel.updateOne(
@@ -317,7 +317,7 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     },
                     { session }
                 );
-                console.log(`✅ Created new wallet transaction and incremented balance by: ₦${amountInNaira}`);
+                console.log(`Created new wallet transaction and incremented balance by: ₦${amountInNaira}`);
             }
         }
 
@@ -358,7 +358,7 @@ const handleAdminTransaction = async (transaction, webhookReference, amountInNai
             }
         }], { session });
 
-        console.log(`✅ Created admin transaction record for webhook event: ${webhookEvent}`);
+        console.log(`Created admin transaction record for webhook event: ${webhookEvent}`);
     } catch (error) {
         console.error('Admin transaction error:', error);
         throw error;
@@ -385,7 +385,7 @@ const sendSuccessEmail = async (data, webhookReference) => {
         }
 
         const user = transaction.userId;
-        const FirstName = user.FirstName || user.FullName?.split(" ")[0] || "Customer";
+        const FirstName = user.FirstName || "Customer";
         const Email = user.Email;
         const date = new Date().toLocaleString();
 
@@ -413,7 +413,7 @@ const sendSuccessEmail = async (data, webhookReference) => {
                   <div class="email-wrapper">
                     <div class="brand-logo">SwiftPay</div>
                     <div class="divider"></div>
-                    <h2>Transaction Successful 🎉</h2>
+                    <h2>Transaction Successful!</h2>
                     <p>Hi <strong>${FirstName}</strong>,</p>
                     <p>Your recent deposit was successful.</p>
                     <div class="success-badge">Transaction Complete</div>
@@ -564,7 +564,7 @@ const sendFailureEmail = async (data) => {
         if (!transaction) return;
 
         const user = transaction.userId;
-        const FirstName = user.FirstName || user.FullName?.split(" ")[0] || "Customer";
+        const FirstName = user.FirstName || "Customer";
         const Email = user.Email;
         const date = new Date().toLocaleString();
 
@@ -590,7 +590,7 @@ const sendFailureEmail = async (data) => {
                   <div class="email-wrapper">
                     <div class="brand-logo">SwiftPay</div>
                     <div class="divider"></div>
-                    <h2>Transaction Failed 😞</h2>
+                    <h2>Transaction Failed!</h2>
                     <p>Hi <strong>${FirstName}</strong>,</p>
                     <p>Unfortunately, your recent transaction failed.</p>
                     <div class="fail-badge">Transaction Failed</div>
