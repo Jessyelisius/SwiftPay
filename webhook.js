@@ -166,11 +166,25 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
                 return; // EXIT EARLY - don't do anything else
             }
 
-            // ✅ DETERMINE if this is the first success (for wallet operations)
-            const isFirstSuccess = transaction.status !== 'success';
+            // ✅ Check if wallet already has this successful transaction
+            const walletRecord = await walletModel.findOne({
+                userId: transaction.userId._id
+            }).session(session);
+
+            const walletHasSuccessfulTx = walletRecord?.transactions?.some(tx => 
+                (tx.reference === webhookReference || 
+                 tx.reference === transaction.reference || 
+                 tx.reference === transaction.korapayReference) && 
+                tx.status === 'success'
+            );
+
+            const shouldUpdateWallet = !walletHasSuccessfulTx;
+            const shouldUpdateTransaction = transaction.status !== 'success';
             
-            // Only update main transaction if it's not already successful
-            if (isFirstSuccess) {
+            console.log(`🔍 Wallet check - Has successful tx: ${walletHasSuccessfulTx}, Should update wallet: ${shouldUpdateWallet}`);
+            
+            // Update main transaction if not already successful
+            if (shouldUpdateTransaction) {
                 await transactions.updateOne(
                     { _id: transaction._id },
                     { 
@@ -185,12 +199,12 @@ const handleSuccessfulCharge = async (data, webhookEvent = null) => {
                 console.log(`⏭️ Transaction ${transaction._id} already successful - skipping status update`);
             }
 
-            // ✅ Handle wallet operations - only if first success
-            if (isFirstSuccess) {
+            // ✅ Handle wallet operations - based on wallet state, not transaction state
+            if (shouldUpdateWallet) {
                 await handleWalletOperation(transaction, webhookReference, amountInNaira, currency, session);
-                console.log(`✅ Wallet operations completed for first success`);
+                console.log(`✅ Wallet operations completed - balance updated`);
             } else {
-                console.log(`⏭️ Skipping wallet operations - not first success`);
+                console.log(`⏭️ Skipping wallet operations - wallet already has successful transaction`);
             }
 
             // ✅ ALWAYS create admin transaction for webhook tracking (this is our idempotency key)
