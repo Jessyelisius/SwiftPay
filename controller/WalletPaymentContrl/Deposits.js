@@ -638,8 +638,29 @@ const submitCardOTP = async (req, res) => {
     }
 };
 
+
+DepositVisualCard = async (req, res) => {
+
+        const session = await mongoose.startSession()
+        session.startTransaction();
+    try {
+        
+        const user = req.user;
+        console.log(user);
+
+        if (!user?.isKycVerified) return res.status(403).json({ Error: true, Message: "KYC not verified" });
+        if (!user?.isprofileVerified) return res.status(403).json({ Error: true, Message: "Profile not verified" });
+
+
+        
+    } catch (error) {
+        
+    }
+}
+
 module.exports = {
     DepositWithCard,
     submitCardPIN,
-    submitCardOTP
+    submitCardOTP,
+    DepositVisualCard
 };
