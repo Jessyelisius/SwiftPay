@@ -30,12 +30,21 @@ const DepositWithCard = async (req, res) => {
             if (!saveCardDetails?.userSavedCard  || saveCardDetails.userSavedCard.length === 0) {
                 return res.status(404).json({ Error: true, Message: "No saved card found" });
             }
+            // return res.status(200).json({
+            //     hasCard: true,
+            //     card: {
+            //         last4: saveCardDetails.userSavedCard.number,
+            //         expiry_month: saveCardDetails.userSavedCard.expiry_month,
+            //         expiry_year: saveCardDetails.userSavedCard.expiry_year
+            //     }
+            // });
+         const firstCard = saveCardDetails.userSavedCard[0];
             return res.status(200).json({
                 hasCard: true,
                 card: {
-                    last4: saveCardDetails.userSavedCard.number,
-                    expiry_month: saveCardDetails.userSavedCard.expiry_month,
-                    expiry_year: saveCardDetails.userSavedCard.expiry_year
+                    last4: firstCard.number,
+                    expiry_month: firstCard.expiry_month,
+                    expiry_year: firstCard.expiry_year
                 }
             });
         }
