@@ -7,214 +7,6 @@ const encryptKorapayPayload = require('../../utils/encryption.util');
 const transactions = require('../../model/transactionModel');
 
 
-// const DepositWithCard = async (req, res) => {
-//     const session = await mongoose.startSession();
-//     session.startTransaction();
-
-//     try {
-//         const user = req.user;
-//         console.log(user);
-        
-//         if (!user?.isKycVerified) return res.status(403).json({ Error: true, Message: "KYC not verified" });
-//         if (!user?.isprofileVerified) return res.status(403).json({ Error: true, Message: "Profile not verified" });
-
-//         if (req.query.checkSavedCard) {
-//             const saveCardDetails = await walletModel.findOne({ userId: user._id });
-//             if (!saveCardDetails?.virtualAccount) {
-//                 return res.status(404).json({ Error: true, Message: "No saved card found" });
-//             }
-//             return res.status(200).json({
-//                 hasCard: true,
-//                 card: {
-//                     last4: saveCardDetails.virtualAccount.number,
-//                     expiry_month: saveCardDetails.virtualAccount.expiry_month,
-//                     expiry_year: saveCardDetails.virtualAccount.expiry_year
-//                 }
-//             });
-//         }
-
-//         const { amount, currency, card, saveCard } = req.body;
-//         if (!amount || !card?.number || !card.expiry_month || !card?.expiry_year || !card?.cvv || !currency) {
-//             return res.status(400).json({ Error: true, Message: "Invalid card details" });
-//         }
-
-//         // Convert amount to Naira (keep as decimal, not kobo)
-//         const amountInNaira = parseFloat(amount);
-//         if (amountInNaira < 100 || amountInNaira > 10000) {
-//             return res.status(400).json({
-//                 Error: true,
-//                 Message: "Amount must be between ₦100 and ₦10,000",
-//                 Code: "INVALID_AMOUNT"
-//             });
-//         }
-
-//         // Convert to kobo only for KoraPay API
-//         const amountInKobo = Math.round(amountInNaira * 100);
-
-//         const reference = `SWIFTPAY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
-//         // Store amount in Naira in database
-//         const newTransaction = new transactions({
-//             userId: user._id,
-//             amount: amountInNaira, // Store in Naira, not kobo
-//             currency,
-//             method: 'card',
-//             type: 'deposit',
-//             status: 'pending',
-//             reference
-//         });
-
-//         await newTransaction.save({ session });
-
-//         const payload = {
-//             amount: amountInKobo, // Send kobo to KoraPay
-//             currency,
-//             reference,
-//             customer: {
-//                 name: user.FirstName,
-//                 email: user.Email,
-//             },
-//             card: {
-//                 number: card.number,
-//                 cvv: card.cvv,
-//                 expiry_month: card.expiry_month,
-//                 expiry_year: card.expiry_year
-//             }
-//         };
-
-//         const encryptionKey = process.env.encryption_key;
-//         if (!encryptionKey) {
-//             await session.abortTransaction();
-//             return res.status(500).json({ Error: true, Message: "Configuration error" });
-//         }
-
-//         const encryptedPayload = encryptKorapayPayload(encryptionKey, payload);
-
-//         const integrateCard = await axios.post(
-//             "https://api.korapay.com/merchant/api/v1/charges/card",
-//             { charge_data: encryptedPayload },
-//             {
-//                 headers: {
-//                     Authorization: `Bearer ${process.env.kora_api_secret}`,
-//                     "Content-Type": "application/json"
-//                 }
-//             }
-//         );
-
-//         // Debug the response
-//         console.log('=== KORAPAY DEBUG ===');
-//         console.log('API Response:', JSON.stringify(integrateCard.data, null, 2));
-//         console.log('=== END DEBUG ===');
-
-//         const chargeData = integrateCard.data?.data;
-//         const chargeStatus = chargeData?.status;
-        
-//         // Fix: Get KoraPay reference from correct field
-//         let korapayReference = chargeData?.transaction_reference;
-        
-//         // If no reference from KoraPay, keep our original reference
-//         if (!korapayReference) {
-//             console.log('No KoraPay reference found, using original reference');
-//             korapayReference = reference;
-//         }
-
-//         console.log('Original Reference:', reference);
-//         console.log('KoraPay Reference:', korapayReference);
-
-//         // Update transaction with KoraPay reference
-//         await newTransaction.updateOne({ 
-//             korapayReference: korapayReference 
-//         }, { session });
-
-//         if (!integrateCard.data?.status || chargeStatus === 'failed') {
-//             await newTransaction.updateOne({ status: 'failed' }, { session });
-//             await session.commitTransaction();
-
-//             return res.status(400).json({
-//                 Error: true,
-//                 Message: integrateCard.data?.message || "Card charge failed",
-//                 Code: "CHARGE_FAILED"
-//             });
-//         }
-
-//         // Fix: Use correct status value that matches your model
-//         const transactionStatus = chargeStatus === 'success' ? 'success' : 'pending';
-
-//         const updateData = {
-//             $push: {
-//                 transactions: {
-//                     type: 'deposit',
-//                     amount: amountInNaira, // Store in Naira
-//                     method: 'card',
-//                     status: transactionStatus,
-//                     reference: korapayReference,
-//                     currency
-//                 }
-//             }
-//         };
-
-//         if (saveCard && chargeData?.authorization) {
-//             updateData.virtualAccount = {
-//                 number: card.number.slice(-4),
-//                 expiry_month: card.expiry_month,
-//                 expiry_year: card.expiry_year,
-//                 authorization: chargeData.authorization
-//             };
-//         }
-
-//         await walletModel.updateOne({ userId: user._id }, updateData, { session });
-
-//         if (chargeStatus === 'success') {
-//             await newTransaction.updateOne({ status: 'success' }, { session });
-//             await walletModel.updateOne(
-//                 { userId: user._id },
-//                 { $inc: { balance: amountInNaira } }, // Increment in Naira
-//                 { session }
-//             );
-
-//             await session.commitTransaction();
-//             return res.status(200).json({
-//                 Error: false,
-//                 Status: "success",
-//                 Message: "Payment Successful",
-//                 Data: {
-//                     reference: korapayReference,
-//                     amount: amountInNaira, // Return in Naira
-//                     currency
-//                 }
-//             });
-//         }
-
-//         // Fix: Better handling of undefined authMode
-//         const authMode = chargeData?.authorization?.mode;
-//         const nextStep = authMode ? authMode.toUpperCase() : "VERIFICATION";
-//         const message = authMode ? `Card requires ${authMode.toUpperCase()}` : "Card requires verification";
-
-//         await session.commitTransaction();
-
-//         return res.status(200).json({
-//             Error: false,
-//             Message: message,
-//             NextStep: `Enter ${nextStep}`,
-//             Reference: korapayReference, // Return KoraPay reference
-//             Mode: authMode || "verification"
-//         });
-
-//     } catch (error) {
-//         await session.abortTransaction();
-//         console.error('DepositWithCard Error:', error);
-//         return res.status(400).json({
-//             Error: true,
-//             Message: ErrorDisplay(error).msg,
-//             Code: error.response?.data?.code || "PROCESSING_ERROR"
-//         });
-//     } finally {
-//         session.endSession();
-//     }
-// };
-
-// POST /api/card/pin
-
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -318,9 +110,9 @@ const DepositWithCard = async (req, res) => {
         );
 
         // Debug the response
-        console.log('=== KORAPAY DEBUG ===');
+        // console.log('=== KORAPAY DEBUG ===');
         console.log('API Response:', JSON.stringify(integrateCard.data, null, 2));
-        console.log('=== END DEBUG ===');
+        // console.log('=== END DEBUG ===');
 
         const chargeData = integrateCard.data?.data;
         const chargeStatus = chargeData?.status;
@@ -371,13 +163,38 @@ const DepositWithCard = async (req, res) => {
             }
         };
 
-        if (saveCard && chargeData?.authorization) {
-            updateData.$set.userSavedCard = {
-                number: card.number.slice(-4),
-                expiry_month: card.expiry_month,
-                expiry_year: card.expiry_year,
-                authorization: chargeData.authorization
-            };
+        // if (saveCard && chargeData?.authorization) {
+        //     updateData.$set.userSavedCard = {
+        //         number: card.number.slice(-4),
+        //         expiry_month: card.expiry_month,
+        //         expiry_year: card.expiry_year,
+        //         authorization: chargeData.authorization
+        //     };
+        // }
+
+            if (saveCard && chargeData?.authorization) {
+            // Get the existing wallet record first
+            const walletRecord = await walletModel.findOne({ userId: user._id });
+
+            const cardExists = walletRecord.userSavedCard?.some(saved =>
+                saved.authorization?.signature === chargeData.authorization?.signature
+            );
+
+            if (!cardExists && walletRecord.userSavedCard?.length < 3) {
+                updateData.$push = {
+                    userSavedCards: {
+                        number: card.number.slice(-4),
+                        expiry_month: card.expiry_month,
+                        expiry_year: card.expiry_year,
+                        authorization: chargeData.authorization,
+                        addedAt: new Date()
+                    }
+                };
+            } else if (cardExists) {
+                console.log('Card already saved, skipping.');
+            } else {
+                console.log('User already has 3 saved cards.');
+            }
         }
 
         await walletModel.updateOne({ userId: user._id }, updateData, { session });

@@ -18,9 +18,13 @@ const WalletSchema = new mongoose.Schema({
         enum:['NGN', 'USD'],
         default: 'NGN'
     },
-    userSavedCard:{
-        type: Object
-    },
+    userSavedCard:[{
+        type: Object,
+    addedAt:{
+        type: Date,
+        default: Date.now()
+    }
+    }],
     hasVirtualAccount:{
         type:Boolean,
     },
