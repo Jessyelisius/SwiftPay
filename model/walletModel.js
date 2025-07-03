@@ -1,3 +1,4 @@
+// Fixed Wallet Schema
 const mongoose = require('mongoose')
 
 const WalletSchema = new mongoose.Schema({
@@ -19,11 +20,26 @@ const WalletSchema = new mongoose.Schema({
         default: 'NGN'
     },
     userSavedCard:[{
-        type: Object,
-    addedAt:{
-        type: Date,
-        default: Date.now()
-    }
+        number: {
+            type: String,
+            required: true
+        },
+        expiry_month: {
+            type: String,
+            required: true
+        },
+        expiry_year: {
+            type: String,
+            required: true
+        },
+        authorization: {
+            type: Object,
+            required: true
+        },
+        addedAt:{
+            type: Date,
+            default: Date.now
+        }
     }],
     hasVirtualAccount:{
         type:Boolean,
@@ -31,9 +47,6 @@ const WalletSchema = new mongoose.Schema({
     virtualAccount:{
         type: Object,
     },
-    // accountDetails:{
-    //     type: Object
-    // },
     lastTransaction:{
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Transaction' 
