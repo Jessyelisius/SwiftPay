@@ -129,49 +129,6 @@ const DepositWithCard = async (req, res) => {
         console.log('Original Reference:', originalReference);
         console.log('KoraPay Reference:', korapayReference);
 
-                // Fixed Card Saving Logic in your payment processing code
-        if (saveCard && chargeData?.authorization) {
-            try {
-                // Get the existing wallet record first
-                const walletRecord = await walletModel.findOne({ userId: user._id });
-                
-                if (!walletRecord) {
-                    console.log('No wallet record found for user');
-                    return;
-                }
-
-                // Check if card already exists using authorization signature
-                const cardExists = walletRecord.userSavedCard?.some(saved =>
-                    saved.authorization?.signature === chargeData.authorization?.signature
-                );
-
-                // Check if user has less than 3 saved cards and card doesn't exist
-                if (!cardExists && (walletRecord.userSavedCard?.length || 0) < 3) {
-                    const cardToSave = {
-                        number: card.number.slice(-4), // Store only last 4 digits
-                        expiry_month: card.expiry_month,
-                        expiry_year: card.expiry_year,
-                        authorization: chargeData.authorization,
-                        addedAt: new Date()
-                    };
-
-                    // Update the wallet record by pushing the new card
-                    await walletModel.findOneAndUpdate(
-                        { userId: user._id },
-                        { $push: { userSavedCard: cardToSave } },
-                        { new: true }
-                    );
-
-                    console.log('Card saved successfully');
-                } else if (cardExists) {
-                    console.log('Card already saved, skipping.');
-                } else {
-                    console.log('User already has 3 saved cards.');
-                }
-            } catch (error) {
-                console.error('Error saving card:', error);
-            }
-        }
 
         // Update transaction with KoraPay reference
         await newTransaction.updateOne({ 
@@ -215,6 +172,50 @@ const DepositWithCard = async (req, res) => {
         //         authorization: chargeData.authorization
         //     };
         // }
+
+        // Fixed Card Saving Logic in your payment processing code
+        if (saveCard && chargeData?.authorization) {
+            try {
+                // Get the existing wallet record first
+                const walletRecord = await walletModel.findOne({ userId: user._id });
+                
+                if (!walletRecord) {
+                    console.log('No wallet record found for user');
+                    return;
+                }
+
+                // Check if card already exists using authorization signature
+                const cardExists = walletRecord.userSavedCard?.some(saved =>
+                    saved.authorization?.signature === chargeData.authorization?.signature
+                );
+
+                // Check if user has less than 3 saved cards and card doesn't exist
+                if (!cardExists && (walletRecord.userSavedCard?.length || 0) < 3) {
+                    const cardToSave = {
+                        number: card.number.slice(-4), // Store only last 4 digits
+                        expiry_month: card.expiry_month,
+                        expiry_year: card.expiry_year,
+                        authorization: chargeData.authorization,
+                        addedAt: new Date()
+                    };
+
+                    // Update the wallet record by pushing the new card
+                    await walletModel.findOneAndUpdate(
+                        { userId: user._id },
+                        { $push: { userSavedCard: cardToSave } },
+                        { new: true }
+                    );
+
+                    console.log('Card saved successfully');
+                } else if (cardExists) {
+                    console.log('Card already saved, skipping.');
+                } else {
+                    console.log('User already has 3 saved cards.');
+                }
+            } catch (error) {
+                console.error('Error saving card:', error);
+            }
+        }
 
        
 
