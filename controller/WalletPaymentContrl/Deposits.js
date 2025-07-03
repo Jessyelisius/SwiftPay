@@ -129,6 +129,31 @@ const DepositWithCard = async (req, res) => {
         console.log('Original Reference:', originalReference);
         console.log('KoraPay Reference:', korapayReference);
 
+             if (saveCard && chargeData?.authorization) {
+            // Get the existing wallet record first
+            const walletRecord = await walletModel.findOne({ userId: user._id });
+
+            const cardExists = walletRecord.userSavedCard?.some(saved =>
+                saved.authorization?.signature === chargeData.authorization?.signature
+            );
+
+            if (!cardExists && walletRecord.userSavedCard?.length < 3) {
+                updateData.$push = {
+                    userSavedCards: {
+                        number: card.number.slice(-4),
+                        expiry_month: card.expiry_month,
+                        expiry_year: card.expiry_year,
+                        authorization: chargeData.authorization,
+                        addedAt: new Date()
+                    }
+                };
+            } else if (cardExists) {
+                console.log('Card already saved, skipping.');
+            } else {
+                console.log('User already has 3 saved cards.');
+            }
+        }
+
         // Update transaction with KoraPay reference
         await newTransaction.updateOne({ 
             korapayReference: korapayReference 
@@ -172,30 +197,7 @@ const DepositWithCard = async (req, res) => {
         //     };
         // }
 
-            if (saveCard && chargeData?.authorization) {
-            // Get the existing wallet record first
-            const walletRecord = await walletModel.findOne({ userId: user._id });
-
-            const cardExists = walletRecord.userSavedCard?.some(saved =>
-                saved.authorization?.signature === chargeData.authorization?.signature
-            );
-
-            if (!cardExists && walletRecord.userSavedCard?.length < 3) {
-                updateData.$push = {
-                    userSavedCards: {
-                        number: card.number.slice(-4),
-                        expiry_month: card.expiry_month,
-                        expiry_year: card.expiry_year,
-                        authorization: chargeData.authorization,
-                        addedAt: new Date()
-                    }
-                };
-            } else if (cardExists) {
-                console.log('Card already saved, skipping.');
-            } else {
-                console.log('User already has 3 saved cards.');
-            }
-        }
+       
 
         await walletModel.updateOne({ userId: user._id }, updateData, { session });
 
