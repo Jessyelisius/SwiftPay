@@ -6,7 +6,6 @@ const ErrorDisplay = require('../../utils/random.util');
 const encryptKorapayPayload = require('../../utils/encryption.util');
 const transactions = require('../../model/transactionModel');
 
-
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -30,15 +29,7 @@ const DepositWithCard = async (req, res) => {
             if (!saveCardDetails?.userSavedCard  || saveCardDetails.userSavedCard.length === 0) {
                 return res.status(404).json({ Error: true, Message: "No saved card found" });
             }
-            // return res.status(200).json({
-            //     hasCard: true,
-            //     card: {
-            //         last4: saveCardDetails.userSavedCard.number,
-            //         expiry_month: saveCardDetails.userSavedCard.expiry_month,
-            //         expiry_year: saveCardDetails.userSavedCard.expiry_year
-            //     }
-            // });
-         const firstCard = saveCardDetails.userSavedCard[0];
+            const firstCard = saveCardDetails.userSavedCard[0];
             return res.status(200).json({
                 hasCard: true,
                 card: {
@@ -119,9 +110,7 @@ const DepositWithCard = async (req, res) => {
         );
 
         // Debug the response
-        // console.log('=== KORAPAY DEBUG ===');
         console.log('API Response:', JSON.stringify(integrateCard.data, null, 2));
-        // console.log('=== END DEBUG ===');
 
         const chargeData = integrateCard.data?.data;
         const chargeStatus = chargeData?.status;
@@ -137,7 +126,6 @@ const DepositWithCard = async (req, res) => {
 
         console.log('Original Reference:', originalReference);
         console.log('KoraPay Reference:', korapayReference);
-
 
         // Update transaction with KoraPay reference
         await newTransaction.updateOne({ 
@@ -173,61 +161,79 @@ const DepositWithCard = async (req, res) => {
             }
         };
 
-        // if (saveCard && chargeData?.authorization) {
-        //     updateData.$set.userSavedCard = {
-        //         number: card.number.slice(-4),
-        //         expiry_month: card.expiry_month,
-        //         expiry_year: card.expiry_year,
-        //         authorization: chargeData.authorization
-        //     };
-        // }
+        // FIXED: Card Saving Logic with proper session handling
+        console.log('=== CARD SAVING DEBUG ===');
+        console.log('saveCard flag:', saveCard);
+        console.log('chargeData exists:', !!chargeData);
+        console.log('authorization exists:', !!chargeData?.authorization);
+        console.log('charge status:', chargeStatus);
 
-        // Fixed Card Saving Logic in your payment processing code
         if (saveCard && chargeData?.authorization) {
             try {
+                console.log('Attempting to save card...');
+                console.log('Authorization data:', JSON.stringify(chargeData.authorization, null, 2));
+                
                 // Get the existing wallet record first
-                const walletRecord = await walletModel.findOne({ userId: user._id });
+                const walletRecord = await walletModel.findOne({ userId: user._id }).session(session);
                 
                 if (!walletRecord) {
                     console.log('No wallet record found for user');
-                    return;
-                }
+                } else {
+                    console.log('Current saved cards:', walletRecord.userSavedCard);
 
-                // Check if card already exists using authorization signature
-                const cardExists = walletRecord.userSavedCard?.some(saved =>
-                    saved.authorization?.signature === chargeData.authorization?.signature
-                );
+                    // Initialize userSavedCard array if it doesn't exist
+                    if (!walletRecord.userSavedCard) {
+                        walletRecord.userSavedCard = [];
+                    }
 
-                // Check if user has less than 3 saved cards and card doesn't exist
-                if (!cardExists && (walletRecord.userSavedCard?.length || 0) < 3) {
-                    const cardToSave = {
-                        number: card.number.slice(-4), // Store only last 4 digits
-                        expiry_month: card.expiry_month,
-                        expiry_year: card.expiry_year,
-                        authorization: chargeData.authorization,
-                        addedAt: new Date()
-                    };
-
-                    // Update the wallet record by pushing the new card
-                    await walletModel.findOneAndUpdate(
-                        { userId: user._id },
-                        { $push: { userSavedCard: cardToSave } },
-                        { new: true }
+                    // Check if card already exists using authorization signature
+                    const cardExists = walletRecord.userSavedCard.some(saved =>
+                        saved.authorization?.signature === chargeData.authorization?.signature
                     );
 
-                    console.log('Card saved successfully');
-                } else if (cardExists) {
-                    console.log('Card already saved, skipping.');
-                } else {
-                    console.log('User already has 3 saved cards.');
+                    console.log('Card exists:', cardExists);
+                    console.log('Current card count:', walletRecord.userSavedCard.length);
+
+                    // Check if user has less than 3 saved cards and card doesn't exist
+                    if (!cardExists && walletRecord.userSavedCard.length < 3) {
+                        const cardToSave = {
+                            number: card.number.slice(-4), // Store only last 4 digits
+                            expiry_month: card.expiry_month,
+                            expiry_year: card.expiry_year,
+                            authorization: chargeData.authorization,
+                            addedAt: new Date()
+                        };
+
+                        console.log('Card to save:', JSON.stringify(cardToSave, null, 2));
+
+                        // FIXED: Add card saving to updateData instead of separate operation
+                        // This ensures it's part of the same transaction
+                        if (!updateData.$push) {
+                            updateData.$push = {};
+                        }
+                        updateData.$push.userSavedCard = cardToSave;
+
+                        console.log('Card will be saved with wallet update');
+                    } else if (cardExists) {
+                        console.log('Card already saved, skipping.');
+                    } else {
+                        console.log('User already has 3 saved cards.');
+                    }
                 }
             } catch (error) {
-                console.error('Error saving card:', error);
+                console.error('Error preparing card save:', error);
+                console.error('Error stack:', error.stack);
             }
+        } else {
+            console.log('Card not saved because:');
+            console.log('- saveCard:', saveCard);
+            console.log('- has authorization:', !!chargeData?.authorization);
+            console.log('- charge status:', chargeStatus);
         }
+        console.log('=== END CARD SAVING DEBUG ===');
 
-       
-
+        // FIXED: Single wallet update operation that includes both transaction and card (if applicable)
+        console.log('Final updateData:', JSON.stringify(updateData, null, 2));
         await walletModel.updateOne({ userId: user._id }, updateData, { session });
 
         if (chargeStatus === 'success') {
@@ -280,8 +286,6 @@ const DepositWithCard = async (req, res) => {
 };
 
 
-// FIXED: Remove balance updates from PIN/OTP handlers
-// Only update transaction status, let webhook handle balance updates
 
 const submitCardPIN = async (req, res) => {
     const session = await mongoose.startSession();
