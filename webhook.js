@@ -124,6 +124,74 @@ const handleKorapayWebhook = async (req, res) => {
     }
 };
 
+/**
+ * Saves user card details to wallet after successful payment
+ * @param {ObjectId} userId - User's MongoDB ID
+ * @param {Object} cardData - Card data from KoraPay response (contains last4, expiry etc)
+ * @param {Object} authorization - Full authorization object from KoraPay
+ * @param {ClientSession} session - MongoDB session for transaction safety
+ */
+const saveUserCard = async (userId, cardData, authorization, session) => {
+    try {
+        console.log('Attempting to save card for user:', userId);
+        
+        //Get the wallet
+        const wallet = await walletModel.findOne({ userId }).session(session);
+        if (!wallet) {
+            console.log('Wallet not found - cannot save card');
+            return;
+        }
+
+        // Initialize array if doesn't exist
+        if (!wallet.userSavedCard) {
+            wallet.userSavedCard = [];
+            await wallet.save({ session });
+        }
+
+        // 3. Check if card already exists (using authorization signature)
+        const existingCardIndex = wallet.userSavedCard.findIndex(
+            card => card.authorization?.signature === authorization?.signature
+        );
+
+        // 4. Prepare card data (only store last4 digits for security)
+        const cardToSave = {
+            // number: cardData?.last_four || '••••', // Only last 4 digits
+            // expiry_month: cardData?.expiry?.split('/')[0]?.trim() || '',
+            // expiry_year: cardData?.expiry?.split('/')[1]?.trim() || '',
+            // authorization: authorization,
+            // card_brand: cardData?.card_type || 'unknown', // Added card type
+            // addedAt: new Date()
+            number: cardData.number.slice(-4), // Store only last 4 digits
+            expiry_month: cardData.expiry_month,
+            expiry_year: cardData.expiry_year,
+            authorization: authorization,
+            addedAt: new Date()
+    };
+
+        // 5. Update or add new card
+        if (existingCardIndex >= 0) {
+            // Update existing card
+            wallet.userSavedCard[existingCardIndex] = cardToSave;
+            console.log('Updating existing card');
+        } else if (wallet.userSavedCard.length < 3) {
+            // Add new card (if under limit)
+            wallet.userSavedCard.push(cardToSave);
+            console.log('Adding new card');
+        } else {
+            console.log('Card limit reached (max 3 cards)');
+            return;
+        }
+
+        // Save changes
+        await wallet.save({ session });
+        console.log('Card saved successfully');
+
+    } catch (error) {
+        console.error('Card saving failed:', error);
+        // Don't throw error - card saving shouldn't fail the whole transaction
+    }
+};
+
 // FIXED: Proper idempotency - check EVERYTHING at the start
 const handleSuccessfulCharge = async (data, webhookEvent = null) => {
     const session = await mongoose.startSession();
@@ -317,7 +385,19 @@ const handleWalletOperation = async (transaction, webhookReference, amountInNair
                     },
                     { session }
                 );
+                
                 console.log(`Created new wallet transaction and incremented balance by: ₦${amountInNaira}`);
+
+                if (data.authorization && transaction.saveCard) {
+                    await saveUserCard(
+                        transaction.userId._id, 
+                        data.card, 
+                        data.authorization, 
+                        session
+                    );
+                } else {
+                console.log(`unable to save user card details`);
+                }
             }
         }
 
