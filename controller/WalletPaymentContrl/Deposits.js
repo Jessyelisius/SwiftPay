@@ -13,26 +13,32 @@ const transactions = require('../../model/transactionModel');
  * @param {Object} authorization - Full authorization object from KoraPay
  * @param {ClientSession} session - MongoDB session for transaction safety
  */
-
-
 const saveUserCard = async (userId, cardData, authorization, session) => {
     try {
-        console.log('Attempting to save card for user:', userId);
+        console.log('=== SAVE CARD DEBUG ===');
+        console.log('UserId:', userId);
+        console.log('CardData:', cardData);
+        console.log('Authorization:', authorization);
         
         // Get the wallet
         const wallet = await walletModel.findOne({ userId }).session(session);
         if (!wallet) {
-            console.log('Wallet not found - cannot save card');
-            return;
+            console.log('Wallet not found for userId:', userId);
+            return { Error: true, MIDIInputessage: 'Wallet not found' };
         }
+        
+        console.log('Wallet found, current saved cards:', wallet.userSavedCard?.length || 0);
 
         // Initialize array if doesn't exist
         if (!wallet.userSavedCard) {
             wallet.userSavedCard = [];
+            console.log('✅ Initialized userSavedCard array');
         }
 
         // Check if card already exists (using authorization signature or last4 + expiry)
         const last4 = cardData.number.slice(-4);
+        console.log('Card last4:', last4);
+        
         const existingCardIndex = wallet.userSavedCard.findIndex(card => {
             if (authorization?.signature && card.authorization?.signature) {
                 return card.authorization.signature === authorization.signature;
@@ -43,6 +49,14 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
                    card.expiry_year === cardData.expiry_year;
         });
 
+        console.log('Existing card index:', existingCardIndex);
+
+        // Check card limit before adding
+        if (existingCardIndex === -1 && wallet.userSavedCard.length >= 3) {
+            console.log('Card limit reached (max 3 cards)');
+            return { Error: true, Message: 'Card limit reached (max 3 cards)' };
+        }
+
         // Prepare card data (only store last4 digits for security)
         const cardToSave = {
             number: last4, // Store only last 4 digits
@@ -52,29 +66,39 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
             addedAt: new Date()
         };
 
+        console.log('Card to save:', cardToSave);
+
         // Update or add new card
         if (existingCardIndex >= 0) {
             // Update existing card
             wallet.userSavedCard[existingCardIndex] = cardToSave;
-            console.log('Updating existing card');
-        } else if (wallet.userSavedCard.length < 3) {
-            // Add new card (if under limit)
-            wallet.userSavedCard.push(cardToSave);
-            console.log('Adding new card');
+            console.log('✅ Updated existing card at index:', existingCardIndex);
         } else {
-            console.log('Card limit reached (max 3 cards)');
-            return;
+            // Add new card
+            wallet.userSavedCard.push(cardToSave);
+            console.log('✅ Added new card, total cards now:', wallet.userSavedCard.length);
         }
 
+        // Mark the array as modified (important for nested objects in Mongoose)
+        wallet.markModified('userSavedCard');
+        
         // Save changes
-        await wallet.save({ session });
-        console.log('Card saved successfully');
+        const savedWallet = await wallet.save({ session });
+        console.log('✅ Wallet saved successfully');
+        console.log('Final saved cards count:', savedWallet.userSavedCard.length);
+
+        return { 
+            success: true, 
+            message: existingCardIndex >= 0 ? 'Card updated successfully' : 'Card added successfully',
+            cardCount: savedWallet.userSavedCard.length
+        };
 
     } catch (error) {
-        console.error('Card saving failed:', error);
-        // Don't throw error - card saving shouldn't fail the whole transaction
+        console.error('❌ Card saving failed:', error);
+        return { success: false, message: error.message };
     }
 };
+
 
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
@@ -253,16 +277,27 @@ const DepositWithCard = async (req, res) => {
                 { session }
             );
 
-        // SAVE CARD HERE - in the main deposit function
-        if (saveCard === true) {
-            console.log('Saving card details...');
-            await saveUserCard(
-                user._id, 
-                card, // Original card data from request
-                chargeData?.authorization, // Authorization from KoraPay
-                session
-            );
-        }
+        // SAVE CARD HERE - with better error handling
+            let cardSaved = false;
+            let cardSaveMessage = '';
+            
+            if (saveCard === true) {
+                console.log('🔄 Attempting to save card details...');
+                const saveResult = await saveUserCard(
+                    user._id, 
+                    card, // Original card data from request
+                    chargeData?.authorization, // Authorization from KoraPay
+                    session
+                );
+                
+                cardSaved = saveResult.success;
+                cardSaveMessage = saveResult.message;
+                
+                if (!cardSaved) {
+                    console.log('⚠️ Card save failed but payment successful:', cardSaveMessage);
+                }
+            }
+
             await session.commitTransaction();
             return res.status(200).json({
                 Error: false,
