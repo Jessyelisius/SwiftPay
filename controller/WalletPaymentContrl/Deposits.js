@@ -6,6 +6,76 @@ const ErrorDisplay = require('../../utils/random.util');
 const encryptKorapayPayload = require('../../utils/encryption.util');
 const transactions = require('../../model/transactionModel');
 
+/**
+ * Saves user card details to wallet after successful payment
+ * @param {ObjectId} userId - User's MongoDB ID
+ * @param {Object} cardData - Card data from request (contains full card info)
+ * @param {Object} authorization - Full authorization object from KoraPay
+ * @param {ClientSession} session - MongoDB session for transaction safety
+ */
+
+
+const saveUserCard = async (userId, cardData, authorization, session) => {
+    try {
+        console.log('Attempting to save card for user:', userId);
+        
+        // Get the wallet
+        const wallet = await walletModel.findOne({ userId }).session(session);
+        if (!wallet) {
+            console.log('Wallet not found - cannot save card');
+            return;
+        }
+
+        // Initialize array if doesn't exist
+        if (!wallet.userSavedCard) {
+            wallet.userSavedCard = [];
+        }
+
+        // Check if card already exists (using authorization signature or last4 + expiry)
+        const last4 = cardData.number.slice(-4);
+        const existingCardIndex = wallet.userSavedCard.findIndex(card => {
+            if (authorization?.signature && card.authorization?.signature) {
+                return card.authorization.signature === authorization.signature;
+            }
+            // Fallback: check by last4 + expiry
+            return card.number === last4 && 
+                   card.expiry_month === cardData.expiry_month && 
+                   card.expiry_year === cardData.expiry_year;
+        });
+
+        // Prepare card data (only store last4 digits for security)
+        const cardToSave = {
+            number: last4, // Store only last 4 digits
+            expiry_month: cardData.expiry_month,
+            expiry_year: cardData.expiry_year,
+            authorization: authorization || {}, // Store authorization data
+            addedAt: new Date()
+        };
+
+        // Update or add new card
+        if (existingCardIndex >= 0) {
+            // Update existing card
+            wallet.userSavedCard[existingCardIndex] = cardToSave;
+            console.log('Updating existing card');
+        } else if (wallet.userSavedCard.length < 3) {
+            // Add new card (if under limit)
+            wallet.userSavedCard.push(cardToSave);
+            console.log('Adding new card');
+        } else {
+            console.log('Card limit reached (max 3 cards)');
+            return;
+        }
+
+        // Save changes
+        await wallet.save({ session });
+        console.log('Card saved successfully');
+
+    } catch (error) {
+        console.error('Card saving failed:', error);
+        // Don't throw error - card saving shouldn't fail the whole transaction
+    }
+};
+
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -160,77 +230,16 @@ const DepositWithCard = async (req, res) => {
                 }
             }
         };
-
-        // FIXED: Card Saving Logic with proper session handling
-        console.log('=== CARD SAVING DEBUG ===');
-        console.log('saveCard flag:', saveCard);
-        console.log('chargeData exists:', !!chargeData);
-        console.log('authorization exists:', !!chargeData?.authorization);
-        console.log('charge status:', chargeStatus);
-
-        if (saveCard && chargeData?.authorization) {
-            try {
-                console.log('Attempting to save card...');
-                console.log('Authorization data:', JSON.stringify(chargeData.authorization, null, 2));
-                
-                // Get the existing wallet record first
-                const walletRecord = await walletModel.findOne({ userId: user._id }).session(session);
-                
-                if (!walletRecord) {
-                    console.log('No wallet record found for user');
-                } else {
-                    console.log('Current saved cards:', walletRecord.userSavedCard);
-
-                    // Initialize userSavedCard array if it doesn't exist
-                    if (!walletRecord.userSavedCard) {
-                        walletRecord.userSavedCard = [];
-                    }
-
-                    // Check if card already exists using authorization signature
-                    const cardExists = walletRecord.userSavedCard.some(saved =>
-                        saved.authorization?.signature === chargeData.authorization?.signature
-                    );
-
-                    console.log('Card exists:', cardExists);
-                    console.log('Current card count:', walletRecord.userSavedCard.length);
-
-                    // Check if user has less than 3 saved cards and card doesn't exist
-                    if (!cardExists && walletRecord.userSavedCard.length < 3) {
-                        const cardToSave = {
-                            number: card.number.slice(-4), // Store only last 4 digits
-                            expiry_month: card.expiry_month,
-                            expiry_year: card.expiry_year,
-                            authorization: chargeData.authorization,
-                            addedAt: new Date()
-                        };
-
-                        console.log('Card to save:', JSON.stringify(cardToSave, null, 2));
-
-                        // FIXED: Add card saving to updateData instead of separate operation
-                        // This ensures it's part of the same transaction
-                        if (!updateData.$push) {
-                            updateData.$push = {};
-                        }
-                        updateData.$push.userSavedCard = cardToSave;
-
-                        console.log('Card will be saved with wallet update');
-                    } else if (cardExists) {
-                        console.log('Card already saved, skipping.');
-                    } else {
-                        console.log('User already has 3 saved cards.');
-                    }
-                }
-            } catch (error) {
-                console.error('Error preparing card save:', error);
-                console.error('Error stack:', error.stack);
-            }
-        } else {
-            console.log('Card not saved because:');
-            console.log('- saveCard:', saveCard);
-            console.log('- has authorization:', !!chargeData?.authorization);
-            console.log('- charge status:', chargeStatus);
-        }
-        console.log('=== END CARD SAVING DEBUG ===');
+        //save card function here!!!
+        // if (saveCard === true) {
+        //     console.log('Saving card details...');
+        //     await saveUserCard(
+        //         user._id, 
+        //         card, // Original card data from request
+        //         chargeData?.authorization, // Authorization from KoraPay
+        //         session
+        //     );
+        // }
 
         // FIXED: Single wallet update operation that includes both transaction and card (if applicable)
         console.log('Final updateData:', JSON.stringify(updateData, null, 2));
@@ -244,6 +253,16 @@ const DepositWithCard = async (req, res) => {
                 { session }
             );
 
+        // SAVE CARD HERE - in the main deposit function
+        if (saveCard === true) {
+            console.log('Saving card details...');
+            await saveUserCard(
+                user._id, 
+                card, // Original card data from request
+                chargeData?.authorization, // Authorization from KoraPay
+                session
+            );
+        }
             await session.commitTransaction();
             return res.status(200).json({
                 Error: false,
@@ -252,7 +271,8 @@ const DepositWithCard = async (req, res) => {
                 Data: {
                     reference: korapayReference,
                     amount: amountInNaira, // Return in Naira
-                    currency
+                    currency,
+                    cardSaved: saveCard === true ? true : false
                 }
             });
         }
@@ -626,5 +646,6 @@ module.exports = {
     DepositWithCard,
     submitCardPIN,
     submitCardOTP,
-    DepositWithVisualAccount
+    DepositWithVisualAccount,
+    saveUserCard
 };
