@@ -592,6 +592,10 @@ const DepositWithVisualAccount = async (req, res) => {
                 email: user.Email,
                 phone: user.Phone || ""
             },
+            kyc:{
+                bvn: "12345678901", // Dummy BVN for testing
+                nin: user.KycDetails.idNumber || idNumber
+            },
             // Optional: Add metadata
             metadata: {
                 userId: user._id.toString(),
@@ -629,29 +633,15 @@ const DepositWithVisualAccount = async (req, res) => {
         });
 
         await virtualAccount.save({ session });
-
-        // Update user record to indicate they have a virtual account
-        // await userModel.findByIdAndUpdate(
-        //     user._id,
-        //     { 
-        //         $set: { 
-        //             hasVirtualAccount: true,
-        //             virtualAccountId: virtualAccount._id
-        //         }
-        //     },
-        //     { session }
-        // );
-
-        await walletModel.findByIdAndUpdate(
-            {userId: user._id},
+        await walletModel.findOneAndUpdate(
+            { userId: user._id }, // Query object
             {
-                $set:{
+                $set: {
                     hasVirtualAccount: true,
                     virtualAccount: virtualAccount._id
                 }
             },
-            {session}
-
+            { session }
         );
 
         // await walletModel.findOneAndUpdate(
