@@ -24,7 +24,7 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
         const wallet = await walletModel.findOne({ userId }).session(session);
         if (!wallet) {
             console.log('Wallet not found for userId:', userId);
-            return { Error: true, MIDIInputessage: 'Wallet not found' };
+            return { success: false, message: 'Wallet not found' }; // Fixed typo
         }
         
         console.log('Wallet found, current saved cards:', wallet.userSavedCard?.length || 0);
@@ -54,7 +54,7 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
         // Check card limit before adding
         if (existingCardIndex === -1 && wallet.userSavedCard.length >= 3) {
             console.log('Card limit reached (max 3 cards)');
-            return { Error: true, Message: 'Card limit reached (max 3 cards)' };
+            return { success: false, message: 'Card limit reached (max 3 cards)' };
         }
 
         // Prepare card data (only store last4 digits for security)
@@ -62,7 +62,7 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
             number: last4, // Store only last 4 digits
             expiry_month: cardData.expiry_month,
             expiry_year: cardData.expiry_year,
-            authorization: authorization || {}, // Store authorization data
+            authorization: authorization || {}, // Store authorization data (make it optional)
             addedAt: new Date()
         };
 
@@ -98,7 +98,6 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
         return { success: false, message: error.message };
     }
 };
-
 
 const DepositWithCard = async (req, res) => {
     const session = await mongoose.startSession();
@@ -254,20 +253,32 @@ const DepositWithCard = async (req, res) => {
                 }
             }
         };
-        //save card function here!!!
-        // if (saveCard === true) {
-        //     console.log('Saving card details...');
-        //     await saveUserCard(
-        //         user._id, 
-        //         card, // Original card data from request
-        //         chargeData?.authorization, // Authorization from KoraPay
-        //         session
-        //     );
-        // }
 
-        // FIXED: Single wallet update operation that includes both transaction and card (if applicable)
-        console.log('Final updateData:', JSON.stringify(updateData, null, 2));
+        // Update wallet with transaction
         await walletModel.updateOne({ userId: user._id }, updateData, { session });
+
+        // SAVE CARD LOGIC - This runs regardless of transaction status
+        let cardSaved = false;
+        let cardSaveMessage = '';
+        
+        if (saveCard === true) {
+            console.log('🔄 Attempting to save card details...');
+            const saveResult = await saveUserCard(
+                user._id, 
+                card, // Original card data from request
+                chargeData?.authorization, // Authorization from KoraPay
+                session
+            );
+            
+            cardSaved = saveResult.success;
+            cardSaveMessage = saveResult.message;
+            
+            if (!cardSaved) {
+                console.log('⚠️ Card save failed:', cardSaveMessage);
+            } else {
+                console.log('✅ Card saved successfully:', cardSaveMessage);
+            }
+        }
 
         if (chargeStatus === 'success') {
             await newTransaction.updateOne({ status: 'success' }, { session });
@@ -276,27 +287,6 @@ const DepositWithCard = async (req, res) => {
                 { $inc: { balance: amountInNaira } }, // Increment in Naira
                 { session }
             );
-
-        // SAVE CARD HERE - with better error handling
-            let cardSaved = false;
-            let cardSaveMessage = '';
-            
-            if (saveCard === true) {
-                console.log('🔄 Attempting to save card details...');
-                const saveResult = await saveUserCard(
-                    user._id, 
-                    card, // Original card data from request
-                    chargeData?.authorization, // Authorization from KoraPay
-                    session
-                );
-                
-                cardSaved = saveResult.success;
-                cardSaveMessage = saveResult.message;
-                
-                if (!cardSaved) {
-                    console.log('⚠️ Card save failed but payment successful:', cardSaveMessage);
-                }
-            }
 
             await session.commitTransaction();
             return res.status(200).json({
@@ -307,7 +297,8 @@ const DepositWithCard = async (req, res) => {
                     reference: korapayReference,
                     amount: amountInNaira, // Return in Naira
                     currency,
-                    cardSaved: saveCard === true ? true : false
+                    cardSaved: cardSaved,
+                    cardSaveMessage: cardSaveMessage
                 }
             });
         }
@@ -324,7 +315,9 @@ const DepositWithCard = async (req, res) => {
             Message: message,
             NextStep: `Enter ${nextStep}`,
             Reference: korapayReference, // Return KoraPay reference
-            Mode: authMode || "verification"
+            Mode: authMode || "verification",
+            cardSaved: cardSaved,
+            cardSaveMessage: cardSaveMessage
         });
 
     } catch (error) {
@@ -339,7 +332,6 @@ const DepositWithCard = async (req, res) => {
         session.endSession();
     }
 };
-
 
 
 const submitCardPIN = async (req, res) => {
