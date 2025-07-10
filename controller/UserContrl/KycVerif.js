@@ -60,7 +60,7 @@ const submitKYC = async (req, res) => {
             !fullName.includes(NinFirstname.toLowerCase()) &&
             !fullName.includes(NinLastname.toLowerCase())
         ) {
-            return res.status(400).json({ Access: true, Error: 'Your name does not match the one on the ID' });
+            return res.status(400).json({ Access: true, Error: 'Your name does not match the one on the ID,' });
         }
 
         await kycModel.create({
