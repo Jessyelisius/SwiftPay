@@ -603,7 +603,7 @@ const DepositWithVisualAccount = async (req, res) => {
         const korapayResponse = await fetch('https://api.korapay.com/merchant/api/v1/virtual-bank-account', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.KORAPAY_SECRET_KEY}`,
+                'Authorization': `Bearer ${process.env.kora_api_secret}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(korapayData)
