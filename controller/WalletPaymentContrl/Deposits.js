@@ -5,6 +5,8 @@ const walletModel = require("../../model/walletModel");
 const ErrorDisplay = require('../../utils/random.util');
 const encryptKorapayPayload = require('../../utils/encryption.util');
 const transactions = require('../../model/transactionModel');
+const VirtualAccount = require("../../model/virtualAccount.Model");
+const userModel = require("../../model/userModel");
 
 /**
  * Saves user card details to wallet after successful payment
@@ -586,9 +588,9 @@ const DepositWithVisualAccount = async (req, res) => {
             permanent: true,
             bank_code: "035", // Default to Wema Bank, you can make this configurable
             customer: {
-                name: `${user.firstName} ${user.lastName}`,
-                email: user.email,
-                phone: user.phoneNumber || ""
+                name: `${user.FirstName} ${user.LastName}`,
+                email: user.Email,
+                phone: user.Phone || ""
             },
             // Optional: Add metadata
             metadata: {
@@ -629,16 +631,46 @@ const DepositWithVisualAccount = async (req, res) => {
         await virtualAccount.save({ session });
 
         // Update user record to indicate they have a virtual account
-        await User.findByIdAndUpdate(
-            user._id,
-            { 
-                $set: { 
+        // await userModel.findByIdAndUpdate(
+        //     user._id,
+        //     { 
+        //         $set: { 
+        //             hasVirtualAccount: true,
+        //             virtualAccountId: virtualAccount._id
+        //         }
+        //     },
+        //     { session }
+        // );
+
+        await walletModel.findByIdAndUpdate(
+            {userId: user._id},
+            {
+                $set:{
                     hasVirtualAccount: true,
-                    virtualAccountId: virtualAccount._id
+                    virtualAccount: virtualAccount._id
                 }
             },
-            { session }
+            {session}
+
         );
+
+        // await walletModel.findOneAndUpdate(
+        // { userId: user._id },
+        // {
+        //     $set: {
+        //     hasVirtualAccount: true,
+        //     virtualAccount: {
+        //         accountNumber: virtualAccount.accountNumber,
+        //         accountName: virtualAccount.accountName,
+        //         bankName: virtualAccount.bankName,
+        //         bankCode: virtualAccount.bankCode,
+        //         accountReference: virtualAccount.accountReference,
+        //         korapayAccountId: virtualAccount.korapayAccountId
+        //     }
+        //     }
+        // },
+        // { session }
+        // );
 
         await session.commitTransaction();
 
