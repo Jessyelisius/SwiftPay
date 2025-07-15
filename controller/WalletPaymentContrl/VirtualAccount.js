@@ -64,6 +64,8 @@ const DepositWithVisualAccount = async (req, res) => {
             await session.abortTransaction();
             return res.status(400).json({ Error: true, Message: "Virtual account creation requires BVN verification" });
         }
+        console.log(decryptedIdNumber);
+        
 
         // Prepare Korapay request data according to API documentation
         const korapayData = {
