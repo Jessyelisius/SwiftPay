@@ -4,15 +4,12 @@ const VirtualAccount = require("../../model/virtualAccount.Model");
 const walletModel = require("../../model/walletModel");
 const { decryptKYCData } = require("../../utils/random.util");
 
-
-
 const DepositWithVisualAccount = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     
     try {
         const user = req.user;
-        console.log(user);
 
         // Validation checks
         if (!user?.isKycVerified) {
@@ -24,7 +21,7 @@ const DepositWithVisualAccount = async (req, res) => {
             return res.status(403).json({ Error: true, Message: "Profile not verified" });
         }
 
-          // Fetch KYC data to get idNumber
+        // Fetch KYC data to get idNumber
         const kycData = await kycModel.findOne({ userid: user._id }).session(session);
         
         if (!kycData) {
@@ -49,31 +46,41 @@ const DepositWithVisualAccount = async (req, res) => {
             });
         }
 
+        // Decrypt the ID number (BVN)
         const decryptedIdNumber = decryptKYCData(kycData.idNumber, process.env.encryption_key);
         if (!decryptedIdNumber) {
             await session.abortTransaction();
             return res.status(400).json({ Error: true, Message: "Invalid KYC data" });
         }
-        // Prepare Korapay request data
+
+        // Validate BVN format
+        if (!/^\d{11}$/.test(decryptedIdNumber)) {
+            await session.abortTransaction();
+            return res.status(400).json({ Error: true, Message: "Invalid BVN format. BVN must be 11 digits" });
+        }
+
+        // Only proceed if the KYC type is BVN
+        if (kycData.idType !== 'bvn') {
+            await session.abortTransaction();
+            return res.status(400).json({ Error: true, Message: "Virtual account creation requires BVN verification" });
+        }
+
+        // Prepare Korapay request data according to API documentation
         const korapayData = {
             account_name: `${user.FirstName} ${user.LastName}`,
             account_reference: `VBA_${user._id}_${Date.now()}`,
             permanent: true,
-            bank_code: "035", // Default to Wema Bank, you can make this configurable
+            bank_code: "035", // Wema Bank
             customer: {
                 name: `${user.FirstName} ${user.LastName}`,
-                email: user.Email,
-                phone: user.Phone || ""
+                email: user.Email
             },
-            kyc:{
-                bvn: decryptedIdNumber // Use the idNumber from KYC data
-            },
-            // Optional: Add metadata
-            metadata: {
-                userId: user._id.toString(),
-                createdAt: new Date().toISOString()
+            kyc: {
+                bvn: decryptedIdNumber
             }
         };
+
+        console.log('Korapay Request Data:', JSON.stringify(korapayData, null, 2));
 
         // Make request to Korapay API
         const korapayResponse = await fetch('https://api.korapay.com/merchant/api/v1/virtual-bank-account', {
@@ -86,9 +93,17 @@ const DepositWithVisualAccount = async (req, res) => {
         });
 
         const korapayResult = await korapayResponse.json();
+        
+        console.log('Korapay Response:', JSON.stringify(korapayResult, null, 2));
 
         if (!korapayResponse.ok || !korapayResult.status) {
-            throw new Error(korapayResult.message || 'Failed to create virtual account');
+            console.error('Korapay API Error:', korapayResult);
+            await session.abortTransaction();
+            return res.status(400).json({ 
+                Error: true, 
+                Message: korapayResult.message || 'Failed to create virtual account',
+                Details: korapayResult.errors || korapayResult
+            });
         }
 
         // Save virtual account details to database
@@ -99,14 +114,16 @@ const DepositWithVisualAccount = async (req, res) => {
             bankName: korapayResult.data.bank_name,
             bankCode: korapayResult.data.bank_code,
             accountReference: korapayResult.data.account_reference,
-            korapayAccountId: korapayResult.data.id,
+            korapayAccountId: korapayResult.data.unique_id, // Note: using unique_id instead of id
             isActive: true,
             createdAt: new Date()
         });
 
         await virtualAccount.save({ session });
+        
+        // Update wallet model
         await walletModel.findOneAndUpdate(
-            { userId: user._id }, // Query object
+            { userId: user._id },
             {
                 $set: {
                     hasVirtualAccount: true,
@@ -146,4 +163,4 @@ const DepositWithVisualAccount = async (req, res) => {
 
 module.exports = {
     DepositWithVisualAccount
-}
+};
