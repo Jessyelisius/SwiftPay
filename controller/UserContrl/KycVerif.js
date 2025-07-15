@@ -11,7 +11,7 @@ const submitKYC = async (req, res) => {
 
         if (!idType || !idNumber) return res.status(400).json({ Error: true, Message: "All fields are required" });
 
-        const existingKyc = await kycModel.findOne({ userId: req.user.id });
+        const existingKyc = await kycModel.findOne({ userId: req.user._id });
         if (existingKyc) return res.status(400).json({ Error: true, Message: "You've already submitted your KYC" });
 
         const user = await userModel.findById(req.user.id);
@@ -50,7 +50,7 @@ const submitKYC = async (req, res) => {
                 data: {bvn: idNumber }
             })).data;
 
-        }else if(idType === 'bvn') {
+        }else if(idType === 'voters_card') {
 
             if (idNumber.length !== 19) return res.status(400).json({ Access: true, Error: 'Voter’s card must be 19 digits' });
 
@@ -74,10 +74,10 @@ const submitKYC = async (req, res) => {
         const fullName = `${user.FirstName} ${user.LastName}`.toLowerCase();
 
         if (
-            !fullName.includes(NinFirstname.toLowerCase()) &&
+            !fullName.includes(NinFirstname.toLowerCase()) ||
             !fullName.includes(NinLastname.toLowerCase())
         ) {
-            return res.status(400).json({ Access: true, Error: 'Your name does not match the one on the ID,' });
+            return res.status(400).json({ Access: true, Error: 'Your name does not match the one on your ID, Please ensure they match exactly.' });
         }
 
         const encryptionKey = process.env.encryption_key;
@@ -108,6 +108,7 @@ const submitKYC = async (req, res) => {
             idNumber: encryptedKycData.idNumber, // Encrypted
             idNumberHash: hashedIdNumber, // Hashed for comparison
             salt: salt, // Store salt for future comparisons
+            status: 'approved', // Auto-approve after successful verification
             // phone: encryptedKycData.phone, // Encrypted phone
             createdAt: new Date(),
             updatedAt: new Date()
@@ -138,6 +139,7 @@ const submitKYC = async (req, res) => {
 
         await profileModel.updateOne({ user: req.user.id }, { 
             profilePhoto: integrate.data.photo,
+            kycStatus: 'approved', // Set to approved after successful KYC
             updatedAt: new Date()
         });
 

@@ -15,7 +15,14 @@ const kycSchema = new mongoose.Schema({
       type: String, 
       required: [true, 'id number is required'] 
     },
-   
+    idNumberHash:{
+      type: String, 
+      required: [true, 'id number hash is required'] 
+    },
+    salt:{
+      type: String, 
+      required: [true, 'salt is required'] 
+    },
     status: { 
       type: String, 
       enum: ['pending', 'approved', 'rejected'], 
@@ -23,6 +30,7 @@ const kycSchema = new mongoose.Schema({
     },
     reasonForRejection: { 
       type: String,
+      default: null,
       // required:[true, 'reason For Rejection is required'] 
     }
   }, { timestamps: true });

@@ -2,6 +2,7 @@ const { default: mongoose } = require("mongoose");
 const kycModel = require("../../model/kyc.Model");
 const VirtualAccount = require("../../model/virtualAccount.Model");
 const walletModel = require("../../model/walletModel");
+const { decryptKYCData } = require("../../utils/random.util");
 
 
 
@@ -48,6 +49,11 @@ const DepositWithVisualAccount = async (req, res) => {
             });
         }
 
+        const decryptedIdNumber = decryptKYCData(kycData.idNumber, process.env.encryption_key);
+        if (!decryptedIdNumber) {
+            await session.abortTransaction();
+            return res.status(400).json({ Error: true, Message: "Invalid KYC data" });
+        }
         // Prepare Korapay request data
         const korapayData = {
             account_name: `${user.FirstName} ${user.LastName}`,
@@ -60,8 +66,7 @@ const DepositWithVisualAccount = async (req, res) => {
                 phone: user.Phone || ""
             },
             kyc:{
-                // bvn: "12345678901", // Dummy BVN for testing
-                nin: kycData.idNumber || idNumber
+                bvn: decryptedIdNumber // Use the idNumber from KYC data
             },
             // Optional: Add metadata
             metadata: {
@@ -110,24 +115,6 @@ const DepositWithVisualAccount = async (req, res) => {
             },
             { session }
         );
-
-        // await walletModel.findOneAndUpdate(
-        // { userId: user._id },
-        // {
-        //     $set: {
-        //     hasVirtualAccount: true,
-        //     virtualAccount: {
-        //         accountNumber: virtualAccount.accountNumber,
-        //         accountName: virtualAccount.accountName,
-        //         bankName: virtualAccount.bankName,
-        //         bankCode: virtualAccount.bankCode,
-        //         accountReference: virtualAccount.accountReference,
-        //         korapayAccountId: virtualAccount.korapayAccountId
-        //     }
-        //     }
-        // },
-        // { session }
-        // );
 
         await session.commitTransaction();
 

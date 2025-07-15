@@ -12,7 +12,7 @@ const WalletSchema = new mongoose.Schema({
         type:Number,
         default:0,
         required:true,
-        min:[0,"Balance is too small"]
+        min:[0,"Balance is too small, cannot be less than 0 or negative"]
     },
     currency:{
         type:String,
