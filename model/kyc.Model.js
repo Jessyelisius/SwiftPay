@@ -8,8 +8,8 @@ const kycSchema = new mongoose.Schema({
     },
     idType: { 
       type: String, 
-      enum: ['voters_card', 'nin'], 
-      required: [true, "pls use any of the above"] 
+      enum: ['voters_card', 'nin', 'bvn'], 
+      required: [true, "pls use any of the above. nin, voters_card or bvn"] 
     },
     idNumber: { 
       type: String, 

@@ -13,11 +13,12 @@ const TransactionSchema = new mongoose.Schema({
     currency: {
         type: String,
         required: true,
+        // enum:['NGN', 'USD'],
         default: 'NGN'
     },
     method: { 
         type: String, 
-        enum: ['card', 'virtual_account', 'bank_transfer'], 
+        enum: ['card', 'virtual_account', 'bank_transfer', 'conversion'], 
         default: 'virtual_account' 
     },
     type: { 

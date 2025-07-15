@@ -45,7 +45,7 @@ const UserModel = new mongoose.Schema(
     },
     KycType: { 
       type: String,
-      enum: ['voters_card', 'nin'] // for consistency
+      enum: ['voters_card', 'nin', 'bvn'] // for consistency
     },
     KycDetails: { 
       type: Object 
