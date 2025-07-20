@@ -41,6 +41,16 @@ const TransactionSchema = new mongoose.Schema({
         required: false,
         sparse: true // This allows multiple null values while maintaining uniqueness for non-null values
     },
+    // Add this field to your existing TransactionSchema
+    recipient: {
+        type: {
+            accountNumber: String,
+            accountName: String,
+            bankCode: String,
+            bankName: String
+        },
+        required: false
+    },      
     metadata: {
         type: mongoose.Schema.Types.Mixed, // For storing additional transaction data
         default: {}

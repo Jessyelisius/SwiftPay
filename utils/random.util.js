@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const transactionModel = require('../model/transactionModel');
 
 // Configuration
 const ALGORITHM = 'aes-256-gcm';
@@ -167,6 +168,71 @@ function generateSalt() {
     return crypto.randomBytes(32).toString('hex');
 }
 
+// 🔐 Generate unique transaction ID (e.g. SWFT-LE2D1J-4K9TZ)
+
+const generateId = (prefix = 'SP', type = '') => {
+  const timestamp = Date.now().toString();
+  const randomBytes = crypto.randomBytes(4).toString('hex').toUpperCase();
+
+  const typeMap = {
+    depositwithcard: 'DEP',
+    bank_transfer: 'TRF',
+    usd_to_ngn: 'CNV',
+    coin_to_ngn: 'COIN',
+    virtual_account: 'VBA'
+  };
+
+  const typePrefix = typeMap[type.toLowerCase()] || 'TXN';
+
+  return `${prefix}-${typePrefix}-${timestamp}-${randomBytes}`;
+};
+
+// Simple fee calculation function (your preferred approach)
+const calculateTransactionFee = (type, amount, existingWeeklyTransfers = []) => {
+    let fee = 0;
+    type = type.toLowerCase();
+    const amt = Number(amount);
+    
+    if (type === 'bank_transfer') {
+        const totalWeeklyTransfers = existingWeeklyTransfers.reduce((sum, tx) => sum + tx.amount, 0);
+        if (amt <= 50000 && existingWeeklyTransfers.length < 3 && totalWeeklyTransfers <= 150000) {
+            fee = 0; // Free transfer
+        } else if (amt <= 50000) {
+            fee = 10; // Minimal fee after 3 free ones
+        } else if (amt > 50000 && amt <= 200000) {
+            fee = 25 + (amt * 0.001);
+        } else {
+            fee = 50 + (amt * 0.0015);
+        }
+    } else if (type === 'instant_transfer') {
+        fee = amt <= 50000 ? 25 : Math.min(100, amt * 0.002);
+    } else if (type === 'international_transfer') {
+        fee = Math.min(2000, Math.max(500, amt * 0.015));
+    } else if (type === 'depositwithcard') {
+        fee = Math.min(2500, Math.max(100, amt * 0.014));
+    } else if (type === 'virtual_account') {
+        fee = amt <= 10000 ? 0 : 10;
+    } else if (type === 'usd_to_ngn' || type === 'coin_to_ngn') {
+        fee = amt * 0.005;
+    }
+    
+    return Math.ceil(fee);
+};
+
+// Helper to get user's weekly transfers (simplified)
+const getWeeklyTransfers = async (userId) => {
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    return await transactionModel.find({
+        userId: userId,
+        type: 'transfer',
+        status: { $in: ['success', 'pending'] },
+        createdAt: { $gte: startOfWeek }
+    });
+};
+
 function ErrorDisplay(error) {
   console.error(error); // Log for debugging, you can remove in production
 
@@ -201,7 +267,10 @@ module.exports = {
     decryptKYCData,
     hashData,
     generateSalt,
-    ErrorDisplay
+    ErrorDisplay,
+    generateId,
+    calculateTransactionFee,
+    getWeeklyTransfers
 };
 
 // Example usage:

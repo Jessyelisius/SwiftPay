@@ -4,6 +4,7 @@ const AdminTransaction = require('./model/admin/transactionModelAdmin');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { Sendmail } = require('./utils/mailer.util');
+const transactionModelAdmin = require('./model/admin/transactionModelAdmin');
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -107,6 +108,10 @@ const handleKorapayWebhook = async (req, res) => {
                 await handleSuccessfulCharge(webhookData.data, webhookData.event);
             } else if (webhookData.event === "charge.failed") {
                 await handleFailedCharge(webhookData.data, webhookData.event);
+            } else if (webhookData.event === "transfer.success") {
+                await handleTransferSuccess(webhookData.data, webhookData.event);
+            } else if (webhookData.event === "transfer.failed") {
+                await handleTransferFailed(webhookData.data, webhookData.event);
             } else {
                 console.log(`Unhandled event type: ${webhookData.event}`);
             }
@@ -615,10 +620,1182 @@ const sendFailureEmail = async (data) => {
     }
 };
 
+
+///transfer secetion
+const handleTransferSuccess = async(req, res) =>{
+    const session = await mongoose.startSession();
+
+    let webhookReference;
+
+    try {
+        await session.withTransaction(async() => {
+            const { reference, amount, currency } = data;
+
+            webhookReference = reference;
+
+            console.log(`Processing transfer success: ${webhookReference}`);
+            //find transaction
+            const transaction = await transactions.findOne({
+                $or: [
+                    { reference: webhookReference },
+                    { korapayReference: webhookReference }
+                ]
+            }).populate('userId', 'Email FirstName').session(session);
+
+            if(!transaction) {
+                console.log(`Transaction not found for reference: ${webhookReference}`);
+                throw new Error(`Transaction not found: ${webhookReference}`);
+            }
+
+            //check if this webhook event was already processed
+            const existingAdminTx = await AdminTransaction.findOne({
+                $and: [
+                    { transactionId: transaction._id },
+                    { 'metadata.webhookEvent': webhookEvent },
+                    { status: 'success' }
+                ]
+            }).session(session);
+
+            if(existingAdminTx) {
+                console.log(`⏭️ SKIPPING: Admin transaction already exists for webhook event: ${webhookEvent}`);
+                return; // EXIT EARLY - don't do anything else
+            }
+
+            //update main transaction if not already successful
+            if(transaction.status !== 'success') {
+                await transactions.updateOne(
+                    { _id: transaction._id },
+                    { 
+                        status: 'success',
+                        korapayReference: webhookReference,
+                        updatedAt: new Date()
+                    },
+                    { session }
+                );
+                console.log(`Updated transaction ${transaction._id} status to success`);
+            }
+
+            //update wallet transaction if exists
+            await walletModel.updateOne(
+                { 
+                    userId: transaction.userId._id,
+                    "transactions.reference": webhookReference
+                },
+                {
+                    $set: {
+                        "transactions.$.status": "success",
+                        "transactions.$.updatedAt": new Date()
+                    }
+                },
+                { session }
+            );
+
+            await transactionModelAdmin.create([{
+                userId: transaction.userId._id,
+                transactionId: transaction._id,
+                type: 'transfer',
+                method: 'bank_transfer',
+                amount: amount,
+                currency: currency || 'NGN',
+                status: 'success',
+                reference: webhookReference,
+                korapayReference: webhookReference,
+                description: `Bank transfer - ${webhookReference}`,
+                metadata: {
+                    paymentGateway: 'korapay',
+                    originalAmount: amount * 100,
+                    processedVia: 'webhook',
+                    webhookProcessedAt: new Date(),
+                    webhookEvent: webhookEvent, // Idempotency key
+                    processingId: `${webhookEvent}-${webhookReference}-${Date.now()}`
+                }
+            }], { session });
+            console.log(`Successfully processed transfer success: ${webhookReference}`);
+        },
+        {
+            readConcern: { level: 'majority' },
+            writeConcern: { w: 'majority' },
+            readPreference: 'primary'
+        });
+
+
+         //find transaction for sending email
+            const transaction = await transactions.findOne({
+                $or: [
+                    { reference: webhookReference },
+                    { korapayReference: webhookReference }
+                ]
+            }).populate('userId', 'Email FirstName').session(session);
+
+            if(!transaction) {
+                console.log(`Transaction not found for reference: ${webhookReference}`);
+                throw new Error(`Transaction not found: ${webhookReference}`);
+            }
+
+            const user = transaction.userId;
+            const FirstName = user.FirstName || "Customer";
+            const Email = user.Email;
+            const Date = new Date().toLocaleString();
+
+        await withRetry(async () => {
+            // Send success email outside of transaction
+            await Sendmail(Email, "SwiftPay Transfer Successful",
+            `
+            <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SwiftPay Transfer Receipt</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      color: #2c3e50;
+      line-height: 1.6;
+      padding: 20px 0;
+    }
+    
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+      padding: 30px;
+      text-align: center;
+      position: relative;
+    }
+    
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><pattern id="grain" width="100" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="0.5" fill="%23ffffff" opacity="0.1"/><circle cx="30" cy="15" r="0.3" fill="%23ffffff" opacity="0.05"/><circle cx="70" cy="5" r="0.4" fill="%23ffffff" opacity="0.08"/></pattern></defs><rect width="100" height="20" fill="url(%23grain)"/></svg>');
+    }
+    
+    .brand {
+      font-size: 32px;
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+      letter-spacing: -1px;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .brand::after {
+      content: 'TRANSFER RECEIPT';
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      margin-top: 5px;
+      opacity: 0.9;
+    }
+    
+    .content {
+      padding: 40px 30px;
+    }
+    
+    .greeting {
+      font-size: 18px;
+      color: #2c3e50;
+      margin-bottom: 25px;
+      font-weight: 500;
+    }
+    
+    .greeting strong {
+      color: #d4af37;
+    }
+    
+    .success-badge {
+      background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .success-badge::before {
+      content: '✓';
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      font-size: 60px;
+      opacity: 0.1;
+      font-weight: bold;
+    }
+    
+    .success-text {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .success-amount {
+      font-size: 28px;
+      font-weight: 800;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .receipt-card {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 25px;
+    }
+    
+    .section-header {
+      background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+      color: white;
+      padding: 15px 20px;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    
+    .section-content {
+      padding: 20px;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+      font-weight: 600;
+      background: rgba(212, 175, 55, 0.05);
+      margin: 0 -20px -20px -20px;
+      padding: 15px 20px;
+    }
+    
+    .label {
+      color: #6c757d;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .value {
+      color: #2c3e50;
+      font-weight: 600;
+      text-align: right;
+      max-width: 60%;
+      word-break: break-word;
+    }
+    
+    .amount-value {
+      color: #d4af37;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    
+    .balance-value {
+      color: #27ae60;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    
+    .reference-value {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      background: #e9ecef;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    
+    .thank-you {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      color: #495057;
+      font-weight: 500;
+      margin-bottom: 30px;
+    }
+    
+    .footer {
+      background: #2c3e50;
+      padding: 25px 30px;
+      text-align: center;
+      color: #bdc3c7;
+    }
+    
+    .footer-brand {
+      color: #d4af37;
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    
+    .footer-text {
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 15px;
+    }
+    
+    .footer-link {
+      color: #d4af37;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .footer-link:hover {
+      text-decoration: underline;
+    }
+    
+    .social-links {
+      margin-top: 15px;
+    }
+    
+    .social-link {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      background: #34495e;
+      border-radius: 50%;
+      margin: 0 5px;
+      line-height: 32px;
+      text-align: center;
+      color: #bdc3c7;
+      text-decoration: none;
+      font-size: 14px;
+      transition: background-color 0.3s ease;
+    }
+    
+    .social-link:hover {
+      background: #d4af37;
+      color: #2c3e50;
+    }
+    
+    /* Mobile Responsive */
+    @media (max-width: 600px) {
+      body {
+        padding: 10px 0;
+      }
+      
+      .email-container {
+        border-radius: 0;
+        margin: 0;
+      }
+      
+      .header, .content, .footer {
+        padding: 25px 20px;
+      }
+      
+      .brand {
+        font-size: 28px;
+      }
+      
+      .success-amount {
+        font-size: 24px;
+      }
+      
+      .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px 0;
+      }
+      
+      .value {
+        max-width: 100%;
+        text-align: left;
+        margin-top: 5px;
+        font-weight: 700;
+      }
+      
+      .section-content {
+        padding: 15px;
+      }
+      
+      .detail-row:last-child {
+        margin: 0 -15px -15px -15px;
+        padding: 12px 15px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .greeting {
+        font-size: 16px;
+      }
+      
+      .success-text {
+        font-size: 14px;
+      }
+      
+      .success-amount {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <div class="brand">SwiftPay</div>
+    </div>
+
+    <div class="content">
+      <div class="greeting">
+        Hello <strong>${FirstName}</strong>,
+      </div>
+
+      <div class="success-badge">
+        <div class="success-text">Transfer Completed Successfully</div>
+        <div class="success-amount">₦${amount.toLocaleString()}</div>
+      </div>
+
+      <div class="receipt-card">
+        <div class="section-header">Transaction Details</div>
+        <div class="section-content">
+          <div class="detail-row">
+            <div class="label">Amount Sent</div>
+            <div class="value amount-value">₦${amount.toLocaleString()}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Transaction Fee</div>
+            <div class="value">${fee > 0 ? `₦${fee.toLocaleString()}` : 'FREE'}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Total Debited</div>
+            <div class="value amount-value">₦${totalDeduction.toLocaleString()}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Current Balance</div>
+            <div class="value balance-value">₦${(userWallet.balance).toLocaleString()}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Transaction ID</div>
+            <div class="value reference-value">${reference}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Date & Time</div>
+            <div class="value">${new Date().toLocaleString('en-GB', { 
+              timeZone: 'Africa/Lagos',
+              year: 'numeric',
+              month: 'short',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            })}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="receipt-card">
+        <div class="section-header">Recipient Details</div>
+        <div class="section-content">
+          <div class="detail-row">
+            <div class="label">Recipient Name</div>
+            <div class="value">${recipient.accountName}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Account Number</div>
+            <div class="value">${recipient.accountNumber}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Bank</div>
+            <div class="value">${recipient.bankName}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Narration</div>
+            <div class="value">${narration || 'SwiftPay Bank Transfer'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="thank-you">
+        Thank you for using SwiftPay. Keep this receipt for your records.
+        ${fee === 0 ? '<br><strong>🎉 This was a FREE transfer!</strong>' : ''}
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-brand">SwiftPay</div>
+      <div class="footer-text">
+        &copy; 2025 SwiftPay Financial Services. All rights reserved.<br />
+        Abuja, Federal Capital Territory, Nigeria
+      </div>
+      <div class="footer-text">
+        Need help? Contact us at <a href="mailto:support@swiftpay.com" class="footer-link">support@swiftpay.com</a><br />
+        Or call: <a href="tel:+2348012345678" class="footer-link">+234 801 234 5678</a>
+      </div>
+      <div class="social-links">
+        <a href="#" class="social-link">f</a>
+        <a href="#" class="social-link">t</a>
+        <a href="#" class="social-link">in</a>
+        <a href="#" class="social-link">@</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+            `
+            )
+        });
+    } catch (error) {
+        console.error(`Error processing transfer success: ${webhookReference}`, error);
+        throw error;
+    }
+}
+
+const handleTransferFailed = async(req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+        await session.withTransaction(async() => {
+              const { reference, reason, amount } = data;
+              console.log(`Processing failed transfer: ${reference}, Reason: ${reason}`);
+
+              // Find transaction
+              const transaction = await transactions.findOne({
+                  $or: [
+                      { reference: reference },
+                      { korapayReference: reference }
+                  ]
+              }).populate('userId', 'Email FirstName').session(session);
+
+              if (!transaction) {
+                  console.log(`Transaction not found for failed transfer: ${reference}`);
+                  throw new Error(`Transaction not found: ${reference}`);
+              }
+
+              // Check if this webhook event was already processed
+              const existingAdminTx = await AdminTransaction.findOne({
+                    $and: [
+                        { transactionId: transaction._id },
+                        { 'metadata.webhookEvent': webhookEvent },
+                        { status: 'failed' }
+                    ]
+                }).session(session);
+
+                if (existingAdminTx) {
+                    console.log(`⏭️ SKIPPING: Failed transfer webhook already processed for: ${reference}`);
+                    return; // EXIT EARLY - don't do anything else
+                }
+
+                // Update main transaction if not already failed
+                if (transaction.status !== 'failed') {
+                    await transactions.updateOne(
+                        { _id: transaction._id },
+                        { 
+                            status: 'failed',
+                            failureReason: reason,
+                            updatedAt: new Date()
+                        },
+                        { session }
+                    );
+                    console.log(`✅ Updated transaction ${transaction._id} status to failed`);
+                }
+
+                // Refund the wallet balance (reverse the deduction)
+                console.log(`Processing failed transfer: ${reference}, Reason: ${reason}`);
+
+                await walletModel.updateOne(
+                    {userId: transaction.userId._id},
+                    {
+                        $inc: { balance: totalDeduction },// Refund the wallet balance (reverse the deduction)
+                        $push: {
+                            transactions: {
+                                reference: `refund- ${transaction.reference}`,
+                                type: 'refund',
+                                amount: amount,
+                                status: 'success',
+                                currency: 'NGN',
+                                method: 'bank_transfer',
+                                narration: `Refund for failed transfer - ${reference}`,
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                                // description: `Refund for failed transfer - ${reference}`
+                            }
+                        }
+                    },
+                    { session }
+
+                );
+
+                // Update original wallet transaction status
+                await walletModel.updateOne(
+                    { 
+                        userId: transaction.userId._id,
+                        "transactions.reference": reference
+                    },
+                    {
+                        $set: {
+                            "transactions.$.status": "failed",
+                            "transactions.$.failureReason": reason,
+                            "transactions.$.updatedAt": new Date()
+                        }
+                    },
+                    { session }
+                );
+
+                // Create admin transaction with improved metadata
+                await AdminTransaction.create([{
+                    userId: transaction.userId._id,
+                    transactionId: transaction._id,
+                    type: 'transfer',
+                    method: 'bank_transfer',
+                    amount: transaction.amount,
+                    currency: 'NGN',
+                    status: 'failed',
+                    reference: reference,
+                    korapayReference: reference,
+                    description: `Failed bank transfer - ${reference}`,
+                    failureReason: reason,
+                    metadata: {
+                        paymentGateway: 'korapay',
+                        refundProcessed: true,
+                        refundAmount: totalDeduction,
+                        processedVia: 'webhook',
+                        failureDetails: reason,
+                        webhookProcessedAt: new Date(),
+                        webhookEvent: webhookEvent // Idempotency key
+                    }
+                }], { session });
+
+                console.log(`✅ Successfully processed failed transfer: ${reference}`);
+        }, {
+            readConcern: { level: 'majority' },
+            writeConcern: { w: 'majority' },
+            readPreference: 'primary'
+
+        });
+
+        // Send failure email outside transaction
+
+        //find transaction for sending email
+            const transaction = await transactions.findOne({
+                $or: [
+                    { reference: webhookReference },
+                    { korapayReference: webhookReference }
+                ]
+            }).populate('userId', 'Email FirstName').session(session);
+
+            if(!transaction) {
+                console.log(`Transaction not found for reference: ${webhookReference}`);
+                throw new Error(`Transaction not found: ${webhookReference}`);
+            }
+
+            const user = transaction.userId;
+            const FirstName = user.FirstName || "Customer";
+            const Email = user.Email;
+            const Date = new Date().toLocaleString();
+
+            await withRetry(async () => {
+            await Sendmail(Email, "SwiftPay Transfer Failed",
+                `
+                <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SwiftPay Transfer Failed</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      color: #2c3e50;
+      line-height: 1.6;
+      padding: 20px 0;
+    }
+    
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    
+    .content {
+      padding: 40px 30px;
+    }
+    
+    .brand {
+      font-size: 24px;
+      font-weight: bold;
+      color: #d4af37;
+      border-bottom: 2px solid #000;
+      padding-bottom: 10px;
+    }
+    
+    .title {
+      font-size: 20px;
+      font-weight: bold;
+      margin-top: 25px;
+      margin-bottom: 10px;
+      color: #000;
+    }
+    
+    .greeting {
+      font-size: 18px;
+      color: #2c3e50;
+      margin-bottom: 25px;
+      font-weight: 500;
+    }
+    
+    .greeting strong {
+      color: #d4af37;
+    }
+    
+    .failed-badge {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .failed-badge::before {
+      content: '✗';
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      font-size: 60px;
+      opacity: 0.1;
+      font-weight: bold;
+    }
+    
+    .failed-text {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .failed-amount {
+      font-size: 28px;
+      font-weight: 800;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .reason-card {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+      border-left: 4px solid #f39c12;
+    }
+    
+    .reason-title {
+      font-weight: 600;
+      color: #856404;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+    
+    .reason-text {
+      color: #856404;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .receipt-card {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 25px;
+    }
+    
+    .section-header {
+      background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+      color: white;
+      padding: 15px 20px;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    
+    .section-content {
+      padding: 20px;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+      font-weight: 600;
+      background: rgba(212, 175, 55, 0.05);
+      margin: 0 -20px -20px -20px;
+      padding: 15px 20px;
+    }
+    
+    .label {
+      color: #6c757d;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .value {
+      color: #2c3e50;
+      font-weight: 600;
+      text-align: right;
+      max-width: 60%;
+      word-break: break-word;
+    }
+    
+    .amount-value {
+      color: #d4af37;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    
+    .balance-value {
+      color: #27ae60;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    
+    .reference-value {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      background: #e9ecef;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    
+    .status-failed {
+      color: #e74c3c;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 14px;
+    }
+    
+    .refund-notice {
+      background: linear-gradient(135deg, #d5f4e6 0%, #c3f0ca 100%);
+      border: 1px solid #27ae60;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+    
+    .refund-title {
+      color: #27ae60;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    
+    .refund-text {
+      color: #155724;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .next-steps {
+      background: #e3f2fd;
+      border: 1px solid #bbdefb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+    }
+    
+    .next-steps-title {
+      color: #1565c0;
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 15px;
+    }
+    
+    .steps-list {
+      color: #1565c0;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-left: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+    
+    .steps-list li {
+      margin-bottom: 8px;
+      padding-left: 20px;
+      position: relative;
+    }
+    
+    .steps-list li::before {
+      content: '•';
+      color: #1565c0;
+      font-weight: bold;
+      position: absolute;
+      left: 0;
+    }
+    
+    .support-info {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      color: #495057;
+      font-weight: 500;
+      margin-bottom: 30px;
+    }
+    
+    .support-title {
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+    
+    .support-link {
+      color: #d4af37;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .footer {
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+      border-top: 1px solid #000;
+      padding-top: 20px;
+      margin-top: 40px;
+    }
+    
+    .footer a {
+      color: #d4af37;
+      text-decoration: none;
+    }
+    
+    /* Mobile Responsive */
+    @media (max-width: 600px) {
+      body {
+        padding: 10px 0;
+      }
+      
+      .email-container {
+        border-radius: 0;
+        margin: 0;
+      }
+      
+      .content, .footer {
+        padding: 25px 20px;
+      }
+      
+      .brand {
+        font-size: 20px;
+      }
+      
+      .failed-amount {
+        font-size: 24px;
+      }
+      
+      .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px 0;
+      }
+      
+      .value {
+        max-width: 100%;
+        text-align: left;
+        margin-top: 5px;
+        font-weight: 700;
+      }
+      
+      .section-content {
+        padding: 15px;
+      }
+      
+      .detail-row:last-child {
+        margin: 0 -15px -15px -15px;
+        padding: 12px 15px;
+      }
+      
+      .reason-card, .refund-notice, .next-steps, .support-info {
+        padding: 15px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .greeting {
+        font-size: 16px;
+      }
+      
+      .failed-text {
+        font-size: 14px;
+      }
+      
+      .failed-amount {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="content">
+      <div class="brand">SwiftPay</div>
+      <div class="title">Bank Transfer Failed</div>
+
+      <div class="greeting">
+        Hello <strong>${FirstName}</strong>,
+      </div>
+
+      <div class="failed-badge">
+        <div class="failed-text">Transfer Failed</div>
+        <div class="failed-amount">₦${amount.toLocaleString()}</div>
+      </div>
+
+      <div class="reason-card">
+        <div class="reason-title">Reason for Failure</div>
+        <div class="reason-text">${failureReason || 'The transfer could not be completed due to a technical issue. Please try again or contact support if the problem persists.'}</div>
+      </div>
+
+      <div class="refund-notice">
+        <div class="refund-title">✓ Funds Automatically Refunded</div>
+        <div class="refund-text">Don't worry! The full amount including any fees has been automatically refunded to your SwiftPay wallet.</div>
+      </div>
+
+      <div class="receipt-card">
+        <div class="section-header">Transaction Details</div>
+        <div class="section-content">
+          <div class="detail-row">
+            <div class="label">Attempted Amount</div>
+            <div class="value amount-value">₦${amount.toLocaleString()}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Transaction Fee</div>
+            <div class="value">${fee > 0 ? `₦${fee.toLocaleString()}` : 'FREE'}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Amount Refunded</div>
+            <div class="value amount-value">₦${totalDeduction.toLocaleString()}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Current Balance</div>
+            <div class="value balance-value">₦${(userWallet.balance).toLocaleString()}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Transaction ID</div>
+            <div class="value reference-value">${reference}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Status</div>
+            <div class="value status-failed">Failed</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Date & Time</div>
+            <div class="value">${new Date().toLocaleString('en-GB', { 
+              timeZone: 'Africa/Lagos',
+              year: 'numeric',
+              month: 'short',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            })}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="receipt-card">
+        <div class="section-header">Intended Recipient</div>
+        <div class="section-content">
+          <div class="detail-row">
+            <div class="label">Recipient Name</div>
+            <div class="value">${recipient.accountName}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Account Number</div>
+            <div class="value">${recipient.accountNumber}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Bank</div>
+            <div class="value">${recipient.bankName}</div>
+          </div>
+          <div class="detail-row">
+            <div class="label">Narration</div>
+            <div class="value">${narration || 'SwiftPay Bank Transfer'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="next-steps">
+        <div class="next-steps-title">What to do next:</div>
+        <ul class="steps-list">
+          <li>Verify the recipient's account details are correct</li>
+          <li>Check if the recipient's bank is currently available</li>
+          <li>Ensure you have sufficient balance for the transfer</li>
+          <li>Try the transfer again in a few minutes</li>
+          <li>Contact our support team if the issue persists</li>
+        </ul>
+      </div>
+
+      <div class="support-info">
+        <div class="support-title">Need Help?</div>
+        <div>Our support team is here to assist you.<br/>
+        Contact us at <a href="mailto:support@swiftpay.com" class="support-link">support@swiftpay.com</a><br/>
+        Or call: <a href="tel:+2348012345678" class="support-link">+234 801 234 5678</a></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      &copy; 2025 SwiftPay. All rights reserved. Abuja, Nigeria<br />
+      Need help? Contact <a href="mailto:support@swiftpay.com">support@swiftpay.com</a>
+    </div>
+  </div>
+</body>
+</html>
+                `
+            )
+        });
+    } catch (error) {
+        console.error(`Failed to send email for transaction: ${webhookReference}`, error);
+        throw error;
+    }
+}
+
 module.exports = {
     handleKorapayWebhook,
     handleSuccessfulCharge,
     handleFailedCharge,
     withRetry,
+    handleTransferSuccess,
+    handleTransferFailed,
     // verifyWebhookSignature
 };

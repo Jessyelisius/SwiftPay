@@ -3,9 +3,9 @@ const kycModel = require("../../model/kyc.Model");
 const VirtualAccount = require("../../model/virtualAccount.Model");
 const walletModel = require("../../model/walletModel");
 const { decryptKYCData } = require("../../utils/random.util"); // Changed back to decryptKYCData
-const { default: axios } = require("axios");
+const axios  = require("axios");
 
-const DepositWithVisualAccount = async (req, res) => {
+const DepositWithVirtualAccount = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     
@@ -217,14 +217,16 @@ const getVirtualAccountDetails = async (req, res) => {
         }
 
         //fetch virtual account details from korapay
-        const korapayResponse = await axios.get(`https://api.korapay.com/merchant/api/v1/virtual-bank-account/${virtualAccount.korapayAccountId}`, {
+        const korapayResponse = await axios.get(`https://api.korapay.com/merchant/api/v1/virtual-bank-account/${virtualAccount.accountReference}`, {
             headers: {
                 'Authorization': `Bearer ${process.env.kora_api_secret}`,
                 'Content-Type': 'application/json',
             }
         });
 
-        const korapayResult = await korapayResponse.json();
+        const korapayResult = await korapayResponse.data;
+        
+        // Log the response for debugging
         console.log('Korapay Virtual Account Details:', JSON.stringify(korapayResult, null, 2));
 
 
@@ -275,6 +277,6 @@ const getVirtualAccountDetails = async (req, res) => {
 
 
 module.exports = {
-    DepositWithVisualAccount,
+    DepositWithVirtualAccount,
     getVirtualAccountDetails
 };
