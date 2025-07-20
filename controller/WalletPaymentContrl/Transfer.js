@@ -116,7 +116,7 @@ const Transfer = async (req, res) => {
                     bank_account: {
                         bank: recipient.bankCode,
                         account: recipient.accountNumber,
-                        // account_name: recipient.accountName
+                        account_name: recipient.accountName
                     }
 
                 },
