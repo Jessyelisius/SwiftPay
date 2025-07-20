@@ -17,6 +17,7 @@ const Transfer = async (req, res) => {
     let amount;
     let recipient = {}; //` Initialize recipient to avoid undefined errors
     let narration = ''; // Initialize narration to avoid undefined errors
+    let isFreeTransfer = fee === 0;// Initialize to track if it's a free transfer
 
     try {
         const user = req.user;
@@ -67,7 +68,7 @@ const Transfer = async (req, res) => {
             //calculate fee using our simplified function
             fee = calculateTransactionFee('bank_transfer', amount, weeklyTransfers);
             totalDeduction = amount + fee;
-            const isFreeTransfer = fee === 3;
+            isFreeTransfer = fee === 3; // Check if the fee is 0 (free transfer)
 
             // Console log fee details (instead of storing complex metadata)
             console.log('=== TRANSFER FEE CALCULATION ===');
