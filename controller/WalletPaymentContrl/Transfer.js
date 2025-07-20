@@ -53,7 +53,7 @@ const Transfer = async (req, res) => {
             const weeklyTransfers = await getWeeklyTransfers(user._id);
 
             //calculate fee using our simplified function
-            const fee = calculateTransactionFee(amount, method = 'bank_transfer', weeklyTransfers);
+            const fee = calculateTransactionFee('bank_transfer', amount, weeklyTransfers);
             const totalDeduction = amount + fee;
             const isFreeTransfer = fee === 3;
 
@@ -61,7 +61,7 @@ const Transfer = async (req, res) => {
             console.log('=== TRANSFER FEE CALCULATION ===');
             console.log(`User: ${user.FirstName} ${user.LastName} (${user._id})`);
             console.log(`Amount: ₦${amount.toLocaleString()}`);
-            console.log(`Method: ${method}`);
+            console.log(`Method: bank_transfer`);
             console.log(`Weekly transfers used: ${weeklyTransfers.length}/3`);
             console.log(`Fee calculated: ₦${fee.toLocaleString()}`);
             console.log(`Total deduction: ₦${totalDeduction.toLocaleString()}`);
@@ -110,14 +110,13 @@ const Transfer = async (req, res) => {
                 reference: reference,
                 destination:{
                     type: 'bank_account',
-                    amount: amount * 100, // Convert to kobo
+                    amount: amount, //korapay expects amount in the payload as naira
                     currency: userWallet.currency,
                     narration: narration || `Transfer from ${user.FirstName} || SwiftPay user`,
                     bank_account: {
-                        account_name: recipient.accountName,
-                        account_number: recipient.accountNumber,
-                        bank_name: recipient.bankName,
-                        bank_code: recipient.bankCode
+                        bank: recipient.bankCode,
+                        account: recipient.accountNumber,
+                        account_name: recipient.accountName
                     }
 
                 },

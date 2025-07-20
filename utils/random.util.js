@@ -182,7 +182,7 @@ const generateId = (prefix = 'SP', type = '') => {
     virtual_account: 'VBA'
   };
 
-  const typePrefix = typeMap[type.toLowerCase()] || 'TXN';
+  const typePrefix = typeMap[(type || '').toLowerCase()] || 'TXN';
 
   return `${prefix}-${typePrefix}-${timestamp}-${randomBytes}`;
 };
@@ -190,7 +190,7 @@ const generateId = (prefix = 'SP', type = '') => {
 // Simple fee calculation function (your preferred approach)
 const calculateTransactionFee = (type, amount, existingWeeklyTransfers = []) => {
     let fee = 0;
-    type = type.toLowerCase();
+    type = (type || '').toLowerCase();
     const amt = Number(amount);
     
     if (type === 'bank_transfer') {
