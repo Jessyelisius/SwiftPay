@@ -12,6 +12,10 @@ const Transfer = async (req, res) => {
 
     const session = await mongoose.startSession();
     let reference; // Initialize reference variable
+    let fee;
+    let totalDeduction;
+    let amount;
+
 
     try {
         const user = req.user;
@@ -34,8 +38,10 @@ const Transfer = async (req, res) => {
 
         await session.withTransaction(async () => {
 
-            const {amount, narration, recipient} = req.body;
+            const {amount: bodyAmount, narration, recipient} = req.body;
 
+            amount = Number(bodyAmount);// Ensure amount is a number
+            
             // Generate a unique reference for the transaction
             reference = generateId('SP', 'bank_transfer');
 
@@ -56,8 +62,8 @@ const Transfer = async (req, res) => {
             const weeklyTransfers = await getWeeklyTransfers(user._id);
 
             //calculate fee using our simplified function
-            const fee = calculateTransactionFee('bank_transfer', amount, weeklyTransfers);
-            const totalDeduction = amount + fee;
+            fee = calculateTransactionFee('bank_transfer', amount, weeklyTransfers);
+            totalDeduction = amount + fee;
             const isFreeTransfer = fee === 3;
 
             // Console log fee details (instead of storing complex metadata)
