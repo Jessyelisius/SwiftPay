@@ -43,6 +43,8 @@ const Transfer = async (req, res) => {
                 return res.status(400).json({ Error: true, Message: "Bad Request || Amount must be greater than 0" });
             }
 
+            const reference = generateId('SP', 'bank_transfer');
+
             const existingTransaction = await transactionModel.findOne({ reference }).session(session);
             if(existingTransaction) {
                 return res.status(400).json({ Error: true, Message: "Bad Request || Transaction with this reference already exists" });
@@ -51,7 +53,7 @@ const Transfer = async (req, res) => {
             const weeklyTransfers = await getWeeklyTransfers(user._id);
 
             //calculate fee using our simplified function
-            const fee = calculateTransactionFee(amount, method, weeklyTransfers);
+            const fee = calculateTransactionFee(amount, method = 'bank_transfer', weeklyTransfers);
             const totalDeduction = amount + fee;
             const isFreeTransfer = fee === 3;
 
@@ -67,7 +69,6 @@ const Transfer = async (req, res) => {
             console.log(`Platform revenue: ₦${fee.toLocaleString()}`); // This is your "money saved/earned"
             console.log('================================');
 
-            const reference = generateId('SP', 'bank_transfer');
 
             const userWallet = await walletModel.findOne({ userId: user._id }).session(session);
             if(!userWallet) {
@@ -127,7 +128,7 @@ const Transfer = async (req, res) => {
 
             };
         const korapayResponse = await axios.post(
-                    'https://api.korapay.com/merchant/api/v1/charges/transfer', 
+                    'https://api.korapay.com/merchant/api/v1/charges/bank-transfer', 
                     korapayPayload, 
                     {
                         headers: {
@@ -233,7 +234,7 @@ const Transfer = async (req, res) => {
     });
     } catch (error) {
         console.error('Transfer error:', error);
-        await session.abortTransaction();
+        // await session.abortTransaction();
         res.status(500).json({
             Access: false,
             Error: true,
