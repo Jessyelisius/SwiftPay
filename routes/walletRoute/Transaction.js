@@ -16,4 +16,4 @@ router.post('/bank_transfer', verifyUserJwt, Transfer);
 // router.post('/depositwithvisualaccount', verifyUserJwt, DepositWithVisualAccount);
 
 
-module.exports = router
+module.exports = router;
