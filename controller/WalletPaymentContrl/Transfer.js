@@ -11,6 +11,7 @@ const transactionModelAdmin = require("../../model/admin/transactionModelAdmin")
 const Transfer = async (req, res) => {
 
     const session = await mongoose.startSession();
+    let reference; // Initialize reference variable
 
     try {
         const user = req.user;
@@ -35,6 +36,9 @@ const Transfer = async (req, res) => {
 
             const {amount, narration, recipient} = req.body;
 
+            // Generate a unique reference for the transaction
+            reference = generateId('SP', 'bank_transfer');
+
             if(!amount || !recipient) {
                 return res.status(400).json({ Error: true, Message: "Bad Request || Missing required fields" });
             }
@@ -43,7 +47,6 @@ const Transfer = async (req, res) => {
                 return res.status(400).json({ Error: true, Message: "Bad Request || Amount must be greater than 0" });
             }
 
-            const reference = generateId('SP', 'bank_transfer');
 
             const existingTransaction = await transactionModel.findOne({ reference }).session(session);
             if(existingTransaction) {
