@@ -116,7 +116,7 @@ const Transfer = async (req, res) => {
                     bank_account: {
                         bank: recipient.bankCode,
                         account: recipient.accountNumber,
-                        account_name: recipient.accountName
+                        // account_name: recipient.accountName
                     }
 
                 },
@@ -127,7 +127,7 @@ const Transfer = async (req, res) => {
 
             };
         const korapayResponse = await axios.post(
-                    'https://api.korapay.com/merchant/api/v1/charges/bank-transfer', 
+                    'https://api.korapay.com/merchant/api/v1/transactions/disburse', 
                     korapayPayload, 
                     {
                         headers: {
@@ -191,8 +191,8 @@ const Transfer = async (req, res) => {
             korapayReference: transferData.data.reference,
             metadata: {
                 narration: narration || '',
-                feeRevenue: fee,
-                totalDeduction: totalDeduction,
+                feeCharged: fee,
+                totalDeducted: totalDeduction,
                 isFreeTransfer,
                 paymentGateway: 'korapay',
                 recipient: recipient,
