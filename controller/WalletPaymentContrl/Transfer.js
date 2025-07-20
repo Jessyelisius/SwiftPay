@@ -110,8 +110,8 @@ const Transfer = async (req, res) => {
                 reference: reference,
                 destination:{
                     type: 'bank_account',
-                    amount: amount, //korapay expects amount in the payload as naira
-                    currency: userWallet.currency,
+                    amount: amount * 100, //korapay expects amount in the payload as kobo
+                    currency: userWallet.currency || 'NGN',
                     narration: narration || `Transfer from ${user.FirstName} || SwiftPay user`,
                     bank_account: {
                         bank: recipient.bankCode,
@@ -139,6 +139,7 @@ const Transfer = async (req, res) => {
 
         const transferData = korapayResponse.data;
         if(transferData.status !== true) {
+            console.error('KoraPay Transfer Error:', transferData);
             throw new Error(`Transfer failed: ${transferData.message}`);
         }
 
@@ -232,7 +233,11 @@ const Transfer = async (req, res) => {
         }
     });
     } catch (error) {
-        console.error('Transfer error:', error);
+        if (error.response?.data) {
+            console.error('🧨 Kora Validation Response:', error.response.data);
+            throw new Error(error.response.data.message || 'Kora validation failed');
+        }
+        
         // await session.abortTransaction();
         res.status(500).json({
             Access: false,
