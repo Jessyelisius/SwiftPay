@@ -116,15 +116,14 @@ const Transfer = async (req, res) => {
                     bank_account: {
                         bank: recipient.bankCode,
                         account: recipient.accountNumber,
-                        account_name: recipient.accountName
+                        // account_name: recipient.accountName
+                    },
+                    customer: {
+                        name: `${user.FirstName} ${user.LastName}`,
+                        email: user.Email,
                     }
-
                 },
-                customer:{
-                    name: `${user.FirstName} ${user.LastName}`,
-                    email: user.Email,
-                }
-
+               
             };
         const korapayResponse = await axios.post(
                     'https://api.korapay.com/merchant/api/v1/transactions/disburse', 
@@ -237,7 +236,7 @@ const Transfer = async (req, res) => {
             console.error('🧨 Kora Validation Response:', error.response.data);
             throw new Error(error.response.data.message || 'Kora validation failed');
         }
-        
+
         // await session.abortTransaction();
         res.status(500).json({
             Access: false,
