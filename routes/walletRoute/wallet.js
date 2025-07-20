@@ -7,8 +7,6 @@ const router = express.Router();
 router.post('/virtualAccountCreation', verifyUserJwt, DepositWithVirtualAccount);
 router.get('/getVirtualAccountDetails', verifyUserJwt, getVirtualAccountDetails);
 
-router.post('/bank_transfer', verifyUserJwt, Transfer);
-
 // router.post('/withdraw', Withdraw);
 
 
