@@ -16,7 +16,7 @@ const Transfer = async (req, res) => {
     let totalDeduction;
     let amount;
     let recipient = {}; //` Initialize recipient to avoid undefined errors
-
+    let narration = ''; // Initialize narration to avoid undefined errors
 
     try {
         const user = req.user;
@@ -39,9 +39,10 @@ const Transfer = async (req, res) => {
 
         await session.withTransaction(async () => {
 
-            const {amount: amt, narration, recipient: rcpt} = req.body;
+            const {amount: amt, narration: narrate, recipient: rcpt} = req.body;
 
             amount = Number(amt);// Ensure amount is a number
+            narration = narrate || ''; // Ensure narration is a string
             recipient = rcpt; // Ensure recipient is an object
 
             // Generate a unique reference for the transaction
