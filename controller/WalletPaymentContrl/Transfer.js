@@ -15,6 +15,7 @@ const Transfer = async (req, res) => {
     let fee;
     let totalDeduction;
     let amount;
+    let recipient = {}; //` Initialize recipient to avoid undefined errors
 
 
     try {
@@ -38,10 +39,11 @@ const Transfer = async (req, res) => {
 
         await session.withTransaction(async () => {
 
-            const {amount: bodyAmount, narration, recipient} = req.body;
+            const {amount: amt, narration, recipient: rcpt} = req.body;
 
-            amount = Number(bodyAmount);// Ensure amount is a number
-            
+            amount = Number(amt);// Ensure amount is a number
+            recipient = rcpt; // Ensure recipient is an object
+
             // Generate a unique reference for the transaction
             reference = generateId('SP', 'bank_transfer');
 
