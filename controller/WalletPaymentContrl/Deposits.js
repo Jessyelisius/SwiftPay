@@ -27,7 +27,7 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
         const wallet = await walletModel.findOne({ userId }).session(session);
         if (!wallet) {
             console.log('Wallet not found for userId:', userId);
-            return { success: false, message: 'Wallet not found' }; // Fixed typo
+            return { Error: true, Message: 'Wallet not found' }; // Fixed typo
         }
         
         console.log('Wallet found, current saved cards:', wallet.userSavedCard?.length || 0);
@@ -57,7 +57,7 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
         // Check card limit before adding
         if (existingCardIndex === -1 && wallet.userSavedCard.length >= 3) {
             console.log('Card limit reached (max 3 cards)');
-            return { success: false, message: 'Card limit reached (max 3 cards)' };
+            return { Error: true, Message: 'Card limit reached (max 3 cards)' };
         }
 
         // Prepare card data (only store last4 digits for security)
@@ -91,14 +91,14 @@ const saveUserCard = async (userId, cardData, authorization, session) => {
         console.log('Final saved cards count:', savedWallet.userSavedCard.length);
 
         return { 
-            success: true, 
-            message: existingCardIndex >= 0 ? 'Card updated successfully' : 'Card added successfully',
+            Error: false, 
+            Message: existingCardIndex >= 0 ? 'Card updated successfully' : 'Card added successfully',
             cardCount: savedWallet.userSavedCard.length
         };
 
     } catch (error) {
         console.error('❌ Card saving failed:', error);
-        return { success: false, message: error.message };
+        return { Error: true, Message: error.message };
     }
 };
 

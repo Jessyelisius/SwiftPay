@@ -16,19 +16,19 @@ const Transfer = async (req, res) => {
         const user = req.user;
 
         if(!user) {
-            return res.status(401).json({ message: "Unauthorized || user not found" });
+            return res.status(401).json({Error: true, Message: "Unauthorized || user not found" });
         }
 
-        if(!user?.isKYCVerified) {
-            return res.status(403).json({ message: "Forbidden || KYC not verified" });
-        }
+        // if(!user?.isKYCVerified) {
+        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        // }
 
         if(!user?.EmailVerif) {
-            return res.status(403).json({ message: "Forbidden || Email not verified" });
+            return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
         }
 
         if(!user?.isprofileVerified) {
-            return res.status(403).json({ message: "Forbidden || Profile not verified" });
+            return res.status(403).json({Error: true, Message: "Forbidden || Profile not verified" });
         }
 
         await session.withTransaction(async () => {
@@ -36,16 +36,16 @@ const Transfer = async (req, res) => {
             const {amount, narration, recipient} = req.body;
 
             if(!amount || !recipient) {
-                return res.status(400).json({ message: "Bad Request || Missing required fields" });
+                return res.status(400).json({ Error: true, Message: "Bad Request || Missing required fields" });
             }
 
             if(amount <= 0) {
-                return res.status(400).json({ message: "Bad Request || Amount must be greater than 0" });
+                return res.status(400).json({ Error: true, Message: "Bad Request || Amount must be greater than 0" });
             }
 
             const existingTransaction = await transactionModel.findOne({ reference }).session(session);
             if(existingTransaction) {
-                return res.status(400).json({ message: "Bad Request || Transaction with this reference already exists" });
+                return res.status(400).json({ Error: true, Message: "Bad Request || Transaction with this reference already exists" });
             }
 
             const weeklyTransfers = await getWeeklyTransfers(user._id);
@@ -71,11 +71,11 @@ const Transfer = async (req, res) => {
 
             const userWallet = await walletModel.findOne({ userId: user._id }).session(session);
             if(!userWallet) {
-                return res.status(404).json({ message: "Not Found || User wallet not found" });
+                return res.status(404).json({ Error: true, Message: "Not Found || User wallet not found" });
             }
 
             if(userWallet.balance < totalDeduction) {
-                return res.status(400).json({ message: `Insufficient balance, Required: ₦${totalDeduction.toLocaleString()} ` +
+                return res.status(400).json({ Error: true, Message: `Insufficient balance, Required: ₦${totalDeduction.toLocaleString()} ` +
                     `(Amount: ₦${amount.toLocaleString()} + Fee: ₦${fee.toLocaleString()}), ` +
                     `Available: ₦${userWallet.balance.toLocaleString()}` });
             }
