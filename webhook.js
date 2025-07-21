@@ -622,7 +622,7 @@ const sendFailureEmail = async (data) => {
 
 
 ///transfer secetion
-const handleTransferSuccess = async(req, res) =>{
+const handleTransferSuccess = async(data, webhookEvent) =>{
     const session = await mongoose.startSession();
 
     let webhookReference;
@@ -1164,14 +1164,18 @@ const handleTransferSuccess = async(req, res) =>{
     }
 }
 
-const handleTransferFailed = async(req, res) => {
+const handleTransferFailed = async(data, webhookEvent) => {
     const session = await mongoose.startSession();
 
+    let totalDeduction;
     try {
         await session.withTransaction(async() => {
               const { reference, reason, amount } = data;
               console.log(`Processing failed transfer: ${reference}, Reason: ${reason}`);
 
+              // ✅ Calculate totalDeduction from transaction metadata
+            totalDeduction = transaction.metadata?.totalDeduction || 
+                    (amount + (transaction.metadata?.fee || 0));
               // Find transaction
               const transaction = await transactions.findOne({
                   $or: [
