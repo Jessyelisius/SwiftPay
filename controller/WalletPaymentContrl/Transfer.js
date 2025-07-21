@@ -136,7 +136,7 @@ const Transfer = async (req, res) => {
                         email: user.Email,
                     }
                 },
-               callback_url: `${process.env.base_url}/webhook/korapay` // 👈 Add this!
+            //    callback_url: `${process.env.base_url}/webhook/korapay` // 👈 Add this!
             };
         const korapayResponse = await axios.post(
                     'https://api.korapay.com/merchant/api/v1/transactions/disburse', 
