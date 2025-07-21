@@ -622,7 +622,7 @@ const sendFailureEmail = async (data) => {
 
 
 ///transfer secetion
-const handleTransferSuccess = async(data, webhookEvent) =>{
+const handleTransferSuccess = async(data, webhookEvent = null) => {
     const session = await mongoose.startSession();
 
     let webhookReference;
@@ -634,6 +634,7 @@ const handleTransferSuccess = async(data, webhookEvent) =>{
             webhookReference = reference;
 
             console.log(`Processing transfer success: ${webhookReference}`);
+            
             //find transaction
             const transaction = await transactions.findOne({
                 $or: [
@@ -1164,7 +1165,7 @@ const handleTransferSuccess = async(data, webhookEvent) =>{
     }
 }
 
-const handleTransferFailed = async(data, webhookEvent) => {
+const handleTransferFailed = async(data, webhookEvent = null) => {
     const session = await mongoose.startSession();
 
     let totalDeduction;
