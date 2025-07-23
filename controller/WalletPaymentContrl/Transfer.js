@@ -150,6 +150,10 @@ const Transfer = async (req, res) => {
         );
 
         const transferData = korapayResponse.data;
+
+        console.log('====================================');
+        console.log(transferData);
+        console.log('====================================');
         if(transferData.status !== true) {
             console.error('KoraPay Transfer Error:', transferData);
             throw new Error(`Transfer failed: ${transferData.message}`);

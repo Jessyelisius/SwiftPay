@@ -328,7 +328,7 @@ const DepositWithCard = async (req, res) => {
         console.error('DepositWithCard Error:', error);
         return res.status(400).json({
             Error: true,
-            Message: ErrorDisplay(error).msg,
+            Message: ErrorDisplay(error).message || "Card deposit failed",
             Code: error.response?.data?.code || "PROCESSING_ERROR"
         });
     } finally {
