@@ -3,21 +3,8 @@ const crypto = require('crypto');
 function encryptKorapayPayload(encryptionKey, payload) {  
   const iv = crypto.randomBytes(16);
 
-  // Ensure key is exactly 32 bytes for AES-256-GCM
-  let key;
-  if (typeof encryptionKey === 'string') {
-    const keyBuffer = Buffer.from(encryptionKey, 'utf8');
-    if (keyBuffer.length === 32) {
-      key = keyBuffer;
-    } else if (keyBuffer.length < 32) {
-      key = Buffer.alloc(32);
-      keyBuffer.copy(key);
-    } else {
-      key = keyBuffer.slice(0, 32);
-    }
-  } else {
-    key = encryptionKey;
-  }
+  // KoraPay expects the key as hex buffer
+  const key = Buffer.from(encryptionKey, 'hex');
 
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const encrypted = cipher.update(JSON.stringify(payload));
