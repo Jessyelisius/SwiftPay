@@ -2,12 +2,12 @@ const axios = require("axios");
 const { default: mongoose } = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
 const walletModel = require("../../model/walletModel");
-const ErrorDisplay = require('../../utils/random.util');
 const encryptKorapayPayload = require('../../utils/encryption.util');
 const transactions = require('../../model/transactionModel');
 const VirtualAccount = require("../../model/virtualAccount.Model");
 const userModel = require("../../model/userModel");
 const kycModel = require("../../model/kyc.Model");
+const { ErrorDisplay } = require("../../utils/random.util");
 
 /**
  * Saves user card details to wallet after successful payment
