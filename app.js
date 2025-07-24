@@ -11,6 +11,34 @@ const app = express();
 const port = process.env.PORT;
 DBconnection();
 
+// Webhook Configuration (Run once on server start)
+const configureWebhooks = async () => {
+  try {
+    const response = await axios.put(
+      'https://api.korapay.com/merchant/api/v1/webhooks',
+      {
+        url: 'https://swiftpay-8evb.onrender.com/korapay-webhook',
+        events: ['transfer.success', 'transfer.failed', 'charge.success', 'charge.failed'],
+        enabled: true
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.KORAPAY_SECRET_KEY}`
+        }
+      }
+    );
+    console.log('✅ Webhooks configured:', response.data);
+  } catch (error) {
+    console.error('❌ Webhook setup failed:', {
+      status: error.response?.status,
+      data: error.response?.data || error.message
+    });
+    
+    // Retry after 30 seconds if failed
+    setTimeout(configureWebhooks, 30000);
+  }
+};
+
 ////////////middleware////////
 app.use(morgan("dev"));
 app.use(express.json());
@@ -45,4 +73,26 @@ app.use("/admin", require("./routes/AdminRoute/admin"));
 app.use("/wallet", require("./routes/walletRoute/wallet"));
 app.use("/transaction", require("./routes/walletRoute/Transaction"));
 
-app.listen(port, () => console.log(`swiftPay app listening on port ${port}!`));
+app.listen(port, async() => {
+  console.log(`swiftPay app listening on port ${port}!`);
+  
+  
+  // Configure webhooks after server starts
+  await configureWebhooks();
+  
+  // Verify webhook configuration
+  try {
+    const response = await axios.get(
+      'https://api.korapay.com/merchant/api/v1/webhooks',
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.KORAPAY_SECRET_KEY}`
+        }
+      }
+    );
+    console.log('ℹ️ Current webhook config:', response.data);
+  } catch (error) {
+    console.error('Failed to verify webhooks:', error.message);
+  }
+});
+
