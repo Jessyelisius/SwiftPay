@@ -5,7 +5,7 @@ const walletModel = require("../../model/walletModel");
 const { decryptKYCData } = require("../../utils/random.util"); // Changed back to decryptKYCData
 const axios  = require("axios");
 
-const DepositWithVirtualAccount = async (req, res) => {
+const CreateVirtualAccount = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     
@@ -276,7 +276,8 @@ const getVirtualAccountDetails = async (req, res) => {
 }
 
 
+
 module.exports = {
-    DepositWithVirtualAccount,
+    CreateVirtualAccount,
     getVirtualAccountDetails
 };

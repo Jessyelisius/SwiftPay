@@ -5,6 +5,10 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { Sendmail } = require('./utils/mailer.util');
 const transactionModelAdmin = require('./model/admin/transactionModelAdmin');
+const VirtualAccount = require('./model/virtualAccount.Model');
+const userModel = require('./model/userModel');
+const { log } = require('console');
+// const transactionModel = require('./model/transactionModel');
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -104,8 +108,16 @@ const handleKorapayWebhook = async (req, res) => {
         
         // Process webhook with retry logic
         await withRetry(async () => {
+            // if (webhookData.event === "charge.success") {
+            //     await handleSuccessfulCharge(webhookData.data, webhookData.event);
             if (webhookData.event === "charge.success") {
-                await handleSuccessfulCharge(webhookData.data, webhookData.event);
+                const isVirtualAccount = webhookData.data?.virtual_bank_account_details?.virtual_bank_account?.bank_name;
+
+                if (isVirtualAccount) {
+                    await VirtualAccountTransferSuccess(webhookData.data, webhookData.event);
+                } else {
+                    await handleSuccessfulCharge(webhookData.data, webhookData.event);
+                }
             } else if (webhookData.event === "charge.failed") {
                 await handleFailedCharge(webhookData.data, webhookData.event);
             } else if (webhookData.event === "transfer.success") {
@@ -1795,6 +1807,261 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
     }
 }
 
+//virtual account deposit success handler
+const VirtualAccountTransferSuccess = async(data, event) => {
+  const session = await mongoose.startSession();
+
+  session.startTransaction();
+  try {
+   
+        //check if already processed
+        const existingTransaction = await transactions.findOne({
+          reference: reference
+        }).session(session);
+
+        if (existingTransaction) {
+            console.log(`Transaction already exists: ${reference} and its processed`);
+            await session.abortTransaction();
+            return;
+        }
+
+         // Check if this is a virtual account deposit
+        if (!data.virtual_bank_account_details) {
+            console.log('Not a virtual account transaction');
+            await session.abortTransaction();
+            return;
+        }
+
+        //find the virtual account details using the payment_reference
+        const accountReference = data.virtual_bank_account_details?.virtual_bank_account?.account_reference;
+
+        //find the virtual account the user
+        const virtualAccount = await VirtualAccount.findOne({
+          accountReference: accountReference
+        }).session(session);
+
+        if(!virtualAccount) {
+            console.log(`Virtual account not found for reference: ${accountReference}`);
+            await session.abortTransaction();
+            return;
+        }
+
+        const user = await userModel.findById(virtualAccount.userId).session(session);
+        if (!user) {
+            console.log(`User not found for virtual account: ${virtualAccount.userId}`);
+            await session.abortTransaction();
+            return;
+        }
+
+        // Calculate net amount ( tho Korapay deducts fees automatically)
+        const depositAmount = data.amount - (data.fee || 0);
+
+        //update user's wallet balance
+        const wallet = await walletModel.findOneAndUpdate(
+          {userId: user._id},
+          {
+            $inc:{balance: depositAmount},
+            $set:{updatedAt: new Date()}
+          },
+          {session, new: true}
+        );
+
+        //create the transaction recordconst
+        const transaction = new transactions({
+          userId: user._id,
+          type: 'deposit',
+          method: 'virtual_account',
+          amount: depositAmount,
+          fee: data.fee || 0,
+          currency: data.currency || 'NGN',
+          status: 'success',
+          reference: data.reference,
+          korapayReference: data.payment_reference,
+          narration: `Virtual Account Deposit - ${data.virtual_bank_account_details?.payer_bank_account?.bank_name}` || 'Virtual Account Deposit',
+          metadata:{
+            webhookEvent: event,
+            payerDetails: data.virtual_bank_account_details?.payer_bank_account || {},
+            virtualAccountDetails: data.virtual_bank_account_details?.virtual_bank_account || {},
+            transactionDate: data.transaction_date || new Date(),
+          },
+          createdAt: new Date(),
+        });
+
+        await transaction.save({ session });
+
+        //create admin transaction record
+        const adminTransaction = new AdminTransaction({
+            userId: user._id,
+            transactionId: transaction._id,
+            type: 'deposit',
+            method: 'virtual_account',
+            amount: depositAmount,
+            fee: data.fee || 0,
+            currency: data.currency || 'NGN',
+            status: 'success',
+            reference: data.reference,
+            korapayReference: data.payment_reference,
+            narration: transaction.narration || 'Virtual Account Deposit',
+            metadata: transaction.metadata,
+            createdAt: new Date(),
+        });
+
+        await adminTransaction.save({ session });
+        // Commit the transaction
+        await session.commitTransaction();
+        console.log(`✅ Successfully processed virtual account deposit: ${depositAmount} for user ${user.Email}`);
+        // session.endSession();
+         await Sendmail(
+        user.Email,
+        "Credit Transaction - SwiftPay",
+        `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8" />
+            <title>SwiftPay Credit Alert</title>
+            <style>
+                body {
+                    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                    background-color: #f5f5f5;
+                    margin: 0;
+                    padding: 0;
+                }
+                .email-wrapper {
+                    max-width: 600px;
+                    margin: 40px auto;
+                    background: #ffffff;
+                    padding: 40px;
+                    border-radius: 8px;
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+                }
+                .brand-logo {
+                    font-weight: bold;
+                    font-size: 24px;
+                    color: #d4af37;
+                    margin-bottom: 10px;
+                }
+                .divider {
+                    width: 100%;
+                    height: 4px;
+                    background-color: #000;
+                    margin-top: 5px;
+                    margin-bottom: 30px;
+                }
+                .alert-header {
+                    text-align: center;
+                    color: #22c55e;
+                    font-size: 18px;
+                    font-weight: bold;
+                    margin-bottom: 20px;
+                }
+                .amount-display {
+                    font-size: 32px;
+                    font-weight: bold;
+                    color: #000;
+                    text-align: center;
+                    margin: 20px 0;
+                }
+                .transaction-info {
+                    border-top: 1px solid #e5e7eb;
+                    border-bottom: 1px solid #e5e7eb;
+                    padding: 20px 0;
+                    margin: 20px 0;
+                }
+                .info-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                    font-size: 14px;
+                }
+                .info-label {
+                    color: #6b7280;
+                }
+                .info-value {
+                    color: #111827;
+                    font-weight: 500;
+                }
+                .footer {
+                    margin-top: 30px;
+                    font-size: 0.85rem;
+                    color: #777;
+                    text-align: center;
+                }
+                .footer-divider {
+                    width: 100%;
+                    height: 2px;
+                    background-color: #000;
+                    margin: 30px 0 10px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="email-wrapper">
+                <div class="brand-logo">SwiftPay</div>
+                <div class="divider"></div>
+                
+                <div class="alert-header">CREDIT ALERT</div>
+                
+                <p style="text-align: center; color: #111827; font-size: 16px; margin: 10px 0;">
+                    // Dear <strong>${user.FirstName} ${user.LastName}</strong>
+                </p>
+                
+                <div class="amount-display">${depositAmount.toLocaleString()}</div>
+                
+                <div class="transaction-info">
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span class="info-value">${new Date(data.transaction_date).toLocaleString('en-NG')}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Reference:</span>
+                        <span class="info-value">${data.reference}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">From:</span>
+                        <span class="info-value">${data.virtual_bank_account_details?.payer_bank_account?.bank_name || 'Bank Transfer'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sender Name:</span>
+                        <span class="info-value">${data.virtual_bank_account_details?.payer_bank_account?.account_name || 'N/A'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span class="info-value">Bank Transfer</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Balance:</span>
+                        <span class="info-value">${wallet.balance?.toLocaleString()}</span>
+                    </div>
+                </div>
+                
+                <p style="text-align: center; color: #6b7280; font-size: 14px; margin: 20px 0;">
+                    Your SwiftPay wallet has been credited.
+                </p>
+                
+                <div class="footer-divider"></div>
+                
+                <div class="footer">
+                    © 2025 SwiftPay. All rights reserved.<br />
+                    Abuja, Nigeria
+                </div>
+            </div>
+        </body>
+        </html>
+        `
+    );
+
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error(`Error processing virtual account deposit: ${data.reference}`, error);
+    throw error;
+  }
+  finally {
+    await session.endSession();
+  }
+}
+
 module.exports = {
     handleKorapayWebhook,
     handleSuccessfulCharge,
@@ -1802,5 +2069,6 @@ module.exports = {
     withRetry,
     handleTransferSuccess,
     handleTransferFailed,
+    VirtualAccountTransferSuccess
     // verifyWebhookSignature
 };

@@ -4,7 +4,7 @@ const kycSchema = new mongoose.Schema({
     userid: { 
       type: mongoose.Schema.Types.ObjectId, 
       ref: "User", 
-      required: [true, "user id ir required"]
+      required: [true, "user id is required"]
     },
     idType: { 
       type: String, 
