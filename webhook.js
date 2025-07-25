@@ -636,13 +636,13 @@ const sendFailureEmail = async (data) => {
 ///transfer secetion
 const handleTransferSuccess = async(data, webhookEvent = null) => {
     const session = await mongoose.startSession();
-
     let webhookReference;
+    let userInfo = null;
+    let transactionData = null;
 
     try {
         await session.withTransaction(async() => {
             const { reference, amount, currency } = data;
-
             webhookReference = reference;
 
             console.log(`Processing transfer success: ${webhookReference}`);
@@ -659,6 +659,20 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                 console.log(`Transaction not found for reference: ${webhookReference}`);
                 throw new Error(`Transaction not found: ${webhookReference}`);
             }
+
+            // Store user info and transaction data for email sending
+            userInfo = {
+                FirstName: transaction.userId.FirstName || "Customer",
+                Email: transaction.userId.Email
+            };
+            transactionData = {
+                amount: transaction.amount,
+                reference: transaction.reference,
+                fee: transaction.metadata?.fee || 0,
+                totalDeduction: transaction.metadata?.totalDeduction || (transaction.amount + (transaction.metadata?.fee || 0)),
+                recipient: transaction.metadata?.recipient || {},
+                narration: transaction.metadata?.narration || 'SwiftPay Bank Transfer'
+            };
 
             //check if this webhook event was already processed
             const existingAdminTx = await AdminTransaction.findOne({
@@ -731,30 +745,15 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
             readPreference: 'primary'
         });
 
-
-         //find transaction for sending email
-            const transaction = await transactions.findOne({
-                $or: [
-                    { reference: webhookReference },
-                    { korapayReference: webhookReference }
-                ]
-            }).populate('userId', 'Email FirstName').session(session);
-
-            if(!transaction) {
-                console.log(`Transaction not found for reference: ${webhookReference}`);
-                throw new Error(`Transaction not found: ${webhookReference}`);
-            }
-
-            const user = transaction.userId;
-            const FirstName = user.FirstName || "Customer";
-            const Email = user.Email;
-            const Date = new Date().toLocaleString();
-
-        await withRetry(async () => {
-            // Send success email outside of transaction
-            await Sendmail(Email, "SwiftPay Transfer Successful",
-            `
-            <!DOCTYPE html>
+        // Send success email outside of transaction
+        if (userInfo && transactionData) {
+            // Get updated wallet balance
+            const userWallet = await walletModel.findOne({ userId: userInfo.userId });
+            
+            await withRetry(async () => {
+                await Sendmail(userInfo.Email, "SwiftPay Transfer Successful",
+                `
+                <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -789,16 +788,6 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
       padding: 30px;
       text-align: center;
       position: relative;
-    }
-    
-    .header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><pattern id="grain" width="100" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="0.5" fill="%23ffffff" opacity="0.1"/><circle cx="30" cy="15" r="0.3" fill="%23ffffff" opacity="0.05"/><circle cx="70" cy="5" r="0.4" fill="%23ffffff" opacity="0.08"/></pattern></defs><rect width="100" height="20" fill="url(%23grain)"/></svg>');
     }
     
     .brand {
@@ -845,16 +834,6 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
       margin-bottom: 30px;
       position: relative;
       overflow: hidden;
-    }
-    
-    .success-badge::before {
-      content: '✓';
-      position: absolute;
-      top: -10px;
-      right: -10px;
-      font-size: 60px;
-      opacity: 0.1;
-      font-weight: bold;
     }
     
     .success-text {
@@ -976,94 +955,6 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
       text-decoration: none;
       font-weight: 600;
     }
-    
-    .footer-link:hover {
-      text-decoration: underline;
-    }
-    
-    .social-links {
-      margin-top: 15px;
-    }
-    
-    .social-link {
-      display: inline-block;
-      width: 32px;
-      height: 32px;
-      background: #34495e;
-      border-radius: 50%;
-      margin: 0 5px;
-      line-height: 32px;
-      text-align: center;
-      color: #bdc3c7;
-      text-decoration: none;
-      font-size: 14px;
-      transition: background-color 0.3s ease;
-    }
-    
-    .social-link:hover {
-      background: #d4af37;
-      color: #2c3e50;
-    }
-    
-    /* Mobile Responsive */
-    @media (max-width: 600px) {
-      body {
-        padding: 10px 0;
-      }
-      
-      .email-container {
-        border-radius: 0;
-        margin: 0;
-      }
-      
-      .header, .content, .footer {
-        padding: 25px 20px;
-      }
-      
-      .brand {
-        font-size: 28px;
-      }
-      
-      .success-amount {
-        font-size: 24px;
-      }
-      
-      .detail-row {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 10px 0;
-      }
-      
-      .value {
-        max-width: 100%;
-        text-align: left;
-        margin-top: 5px;
-        font-weight: 700;
-      }
-      
-      .section-content {
-        padding: 15px;
-      }
-      
-      .detail-row:last-child {
-        margin: 0 -15px -15px -15px;
-        padding: 12px 15px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .greeting {
-        font-size: 16px;
-      }
-      
-      .success-text {
-        font-size: 14px;
-      }
-      
-      .success-amount {
-        font-size: 20px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -1074,12 +965,12 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
 
     <div class="content">
       <div class="greeting">
-        Hello <strong>${FirstName}</strong>,
+        Hello <strong>${userInfo.FirstName}</strong>,
       </div>
 
       <div class="success-badge">
         <div class="success-text">Transfer Completed Successfully</div>
-        <div class="success-amount">₦${amount.toLocaleString()}</div>
+        <div class="success-amount">₦${transactionData.amount.toLocaleString()}</div>
       </div>
 
       <div class="receipt-card">
@@ -1087,23 +978,23 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
         <div class="section-content">
           <div class="detail-row">
             <div class="label">Amount Sent</div>
-            <div class="value amount-value">₦${amount.toLocaleString()}</div>
+            <div class="value amount-value">₦${transactionData.amount.toLocaleString()}</div>
           </div>
           <div class="detail-row">
             <div class="label">Transaction Fee</div>
-            <div class="value">${fee > 0 ? `₦${fee.toLocaleString()}` : 'FREE'}</div>
+            <div class="value">${transactionData.fee > 0 ? `₦${transactionData.fee.toLocaleString()}` : 'FREE'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Total Debited</div>
-            <div class="value amount-value">₦${totalDeduction.toLocaleString()}</div>
+            <div class="value amount-value">₦${transactionData.totalDeduction.toLocaleString()}</div>
           </div>
           <div class="detail-row">
             <div class="label">Current Balance</div>
-            <div class="value balance-value">₦${(userWallet.balance).toLocaleString()}</div>
+            <div class="value balance-value">₦${(userWallet?.balance || 0).toLocaleString()}</div>
           </div>
           <div class="detail-row">
             <div class="label">Transaction ID</div>
-            <div class="value reference-value">${reference}</div>
+            <div class="value reference-value">${transactionData.reference}</div>
           </div>
           <div class="detail-row">
             <div class="label">Date & Time</div>
@@ -1125,26 +1016,26 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
         <div class="section-content">
           <div class="detail-row">
             <div class="label">Recipient Name</div>
-            <div class="value">${recipient.accountName}</div>
+            <div class="value">${transactionData.recipient.accountName || 'N/A'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Account Number</div>
-            <div class="value">${recipient.accountNumber}</div>
+            <div class="value">${transactionData.recipient.accountNumber || 'N/A'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Bank</div>
-            <div class="value">${recipient.bankName}</div>
+            <div class="value">${transactionData.recipient.bankName || 'N/A'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Narration</div>
-            <div class="value">${narration || 'SwiftPay Bank Transfer'}</div>
+            <div class="value">${transactionData.narration}</div>
           </div>
         </div>
       </div>
 
       <div class="thank-you">
         Thank you for using SwiftPay. Keep this receipt for your records.
-        ${fee === 0 ? '<br><strong>🎉 This was a FREE transfer!</strong>' : ''}
+        ${transactionData.fee === 0 ? '<br><strong>🎉 This was a FREE transfer!</strong>' : ''}
       </div>
     </div>
 
@@ -1158,176 +1049,173 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
         Need help? Contact us at <a href="mailto:support@swiftpay.com" class="footer-link">support@swiftpay.com</a><br />
         Or call: <a href="tel:+2348012345678" class="footer-link">+234 801 234 5678</a>
       </div>
-      <div class="social-links">
-        <a href="#" class="social-link">f</a>
-        <a href="#" class="social-link">t</a>
-        <a href="#" class="social-link">in</a>
-        <a href="#" class="social-link">@</a>
-      </div>
     </div>
   </div>
 </body>
 </html>
-            `
-            )
-        });
+                `
+                );
+            });
+        }
     } catch (error) {
         console.error(`Error processing transfer success: ${webhookReference}`, error);
         throw error;
+    } finally {
+        await session.endSession();
     }
-}
+};
 
 const handleTransferFailed = async(data, webhookEvent = null) => {
     const session = await mongoose.startSession();
+    let failedReference;
+    let userInfo = null;
+    let transactionData = null;
 
-    let totalDeduction;
     try {
         await session.withTransaction(async() => {
-              const { reference, reason, amount } = data;
-              console.log(`Processing failed transfer: ${reference}, Reason: ${reason}`);
+            const { reference, reason, amount } = data;
+            failedReference = reference;
+            console.log(`Processing failed transfer: ${reference}, Reason: ${reason}`);
 
-              // ✅ Calculate totalDeduction from transaction metadata
-            totalDeduction = transaction.metadata?.totalDeduction || 
-                    (amount + (transaction.metadata?.fee || 0));
-              // Find transaction
-              const transaction = await transactions.findOne({
-                  $or: [
-                      { reference: reference },
-                      { korapayReference: reference }
-                  ]
-              }).populate('userId', 'Email FirstName').session(session);
+            // Find transaction
+            const transaction = await transactions.findOne({
+                $or: [
+                    { reference: reference },
+                    { korapayReference: reference }
+                ]
+            }).populate('userId', 'Email FirstName').session(session);
 
-              if (!transaction) {
-                  console.log(`Transaction not found for failed transfer: ${reference}`);
-                  throw new Error(`Transaction not found: ${reference}`);
-              }
+            if (!transaction) {
+                console.log(`Transaction not found for failed transfer: ${reference}`);
+                throw new Error(`Transaction not found: ${reference}`);
+            }
 
-              // Check if this webhook event was already processed
-              const existingAdminTx = await AdminTransaction.findOne({
-                    $and: [
-                        { transactionId: transaction._id },
-                        { 'metadata.webhookEvent': webhookEvent },
-                        { status: 'failed' }
-                    ]
-                }).session(session);
+            // Calculate totalDeduction from transaction metadata
+            const totalDeduction = transaction.metadata?.totalDeduction || 
+                (amount + (transaction.metadata?.fee || 0));
 
-                if (existingAdminTx) {
-                    console.log(`⏭️ SKIPPING: Failed transfer webhook already processed for: ${reference}`);
-                    return; // EXIT EARLY - don't do anything else
-                }
+            // Store user info and transaction data for email sending
+            userInfo = {
+                FirstName: transaction.userId.FirstName || "Customer",
+                Email: transaction.userId.Email,
+                userId: transaction.userId._id
+            };
+            transactionData = {
+                amount: transaction.amount,
+                reference: transaction.reference,
+                fee: transaction.metadata?.fee || 0,
+                totalDeduction: totalDeduction,
+                recipient: transaction.metadata?.recipient || {},
+                narration: transaction.metadata?.narration || 'SwiftPay Bank Transfer',
+                failureReason: reason
+            };
 
-                // Update main transaction if not already failed
-                if (transaction.status !== 'failed') {
-                    await transactions.updateOne(
-                        { _id: transaction._id },
-                        { 
-                            status: 'failed',
-                            failureReason: reason,
-                            updatedAt: new Date()
-                        },
-                        { session }
-                    );
-                    console.log(`✅ Updated transaction ${transaction._id} status to failed`);
-                }
+            // Check if this webhook event was already processed
+            const existingAdminTx = await AdminTransaction.findOne({
+                $and: [
+                    { transactionId: transaction._id },
+                    { 'metadata.webhookEvent': webhookEvent },
+                    { status: 'failed' }
+                ]
+            }).session(session);
 
-                // Refund the wallet balance (reverse the deduction)
-                console.log(`Processing failed transfer: ${reference}, Reason: ${reason}`);
+            if (existingAdminTx) {
+                console.log(`⏭️ SKIPPING: Failed transfer webhook already processed for: ${reference}`);
+                return; // EXIT EARLY - don't do anything else
+            }
 
-                await walletModel.updateOne(
-                    {userId: transaction.userId._id},
-                    {
-                        $inc: { balance: totalDeduction },// Refund the wallet balance (reverse the deduction)
-                        $push: {
-                            transactions: {
-                                reference: `refund- ${transaction.reference}`,
-                                type: 'refund',
-                                amount: amount,
-                                status: 'success',
-                                currency: 'NGN',
-                                method: 'bank_transfer',
-                                narration: `Refund for failed transfer - ${reference}`,
-                                createdAt: new Date(),
-                                updatedAt: new Date(),
-                                // description: `Refund for failed transfer - ${reference}`
-                            }
-                        }
-                    },
-                    { session }
-
-                );
-
-                // Update original wallet transaction status
-                await walletModel.updateOne(
+            // Update main transaction if not already failed
+            if (transaction.status !== 'failed') {
+                await transactions.updateOne(
+                    { _id: transaction._id },
                     { 
-                        userId: transaction.userId._id,
-                        "transactions.reference": reference
-                    },
-                    {
-                        $set: {
-                            "transactions.$.status": "failed",
-                            "transactions.$.failureReason": reason,
-                            "transactions.$.updatedAt": new Date()
-                        }
+                        status: 'failed',
+                        failureReason: reason,
+                        updatedAt: new Date()
                     },
                     { session }
                 );
+                console.log(`✅ Updated transaction ${transaction._id} status to failed`);
+            }
 
-                // Create admin transaction with improved metadata
-                await AdminTransaction.create([{
-                    userId: transaction.userId._id,
-                    transactionId: transaction._id,
-                    type: 'transfer',
-                    method: 'bank_transfer',
-                    amount: transaction.amount,
-                    currency: 'NGN',
-                    status: 'failed',
-                    reference: reference,
-                    korapayReference: reference,
-                    description: `Failed bank transfer - ${reference}`,
-                    failureReason: reason,
-                    metadata: {
-                        paymentGateway: 'korapay',
-                        refundProcessed: true,
-                        refundAmount: totalDeduction,
-                        processedVia: 'webhook',
-                        failureDetails: reason,
-                        webhookProcessedAt: new Date(),
-                        webhookEvent: webhookEvent // Idempotency key
+            // Refund the wallet balance (reverse the deduction)
+            await walletModel.updateOne(
+                {userId: transaction.userId._id},
+                {
+                    $inc: { balance: totalDeduction }, // Refund the wallet balance (reverse the deduction)
+                    $push: {
+                        transactions: {
+                            reference: `refund-${transaction.reference}`,
+                            type: 'refund',
+                            amount: amount,
+                            status: 'success',
+                            currency: 'NGN',
+                            method: 'bank_transfer',
+                            narration: `Refund for failed transfer - ${reference}`,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        }
                     }
-                }], { session });
+                },
+                { session }
+            );
 
-                console.log(`✅ Successfully processed failed transfer: ${reference}`);
+            // Update original wallet transaction status
+            await walletModel.updateOne(
+                { 
+                    userId: transaction.userId._id,
+                    "transactions.reference": reference
+                },
+                {
+                    $set: {
+                        "transactions.$.status": "failed",
+                        "transactions.$.failureReason": reason,
+                        "transactions.$.updatedAt": new Date()
+                    }
+                },
+                { session }
+            );
+
+            // Create admin transaction with improved metadata
+            await AdminTransaction.create([{
+                userId: transaction.userId._id,
+                transactionId: transaction._id,
+                type: 'transfer',
+                method: 'bank_transfer',
+                amount: transaction.amount,
+                currency: 'NGN',
+                status: 'failed',
+                reference: reference,
+                korapayReference: reference,
+                description: `Failed bank transfer - ${reference}`,
+                failureReason: reason,
+                metadata: {
+                    paymentGateway: 'korapay',
+                    refundProcessed: true,
+                    refundAmount: totalDeduction,
+                    processedVia: 'webhook',
+                    failureDetails: reason,
+                    webhookProcessedAt: new Date(),
+                    webhookEvent: webhookEvent // Idempotency key
+                }
+            }], { session });
+
+            console.log(`✅ Successfully processed failed transfer: ${reference}`);
         }, {
             readConcern: { level: 'majority' },
             writeConcern: { w: 'majority' },
             readPreference: 'primary'
-
         });
 
         // Send failure email outside transaction
-
-        //find transaction for sending email
-            const transaction = await transactions.findOne({
-                $or: [
-                    { reference: webhookReference },
-                    { korapayReference: webhookReference }
-                ]
-            }).populate('userId', 'Email FirstName').session(session);
-
-            if(!transaction) {
-                console.log(`Transaction not found for reference: ${webhookReference}`);
-                throw new Error(`Transaction not found: ${webhookReference}`);
-            }
-
-            const user = transaction.userId;
-            const FirstName = user.FirstName || "Customer";
-            const Email = user.Email;
-            const Date = new Date().toLocaleString();
-
+        if (userInfo && transactionData) {
+            // Get updated wallet balance
+            const userWallet = await walletModel.findOne({ userId: userInfo.userId });
+            
             await withRetry(async () => {
-            await Sendmail(Email, "SwiftPay Transfer Failed",
-                `
-                <!DOCTYPE html>
+                await Sendmail(userInfo.Email, "SwiftPay Transfer Failed",
+                    `
+                    <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1399,16 +1287,6 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
       overflow: hidden;
     }
     
-    .failed-badge::before {
-      content: '✗';
-      position: absolute;
-      top: -10px;
-      right: -10px;
-      font-size: 60px;
-      opacity: 0.1;
-      font-weight: bold;
-    }
-    
     .failed-text {
       font-size: 16px;
       font-weight: 600;
@@ -1439,6 +1317,28 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
     
     .reason-text {
       color: #856404;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .refund-notice {
+      background: linear-gradient(135deg, #d5f4e6 0%, #c3f0ca 100%);
+      border: 1px solid #27ae60;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+    
+    .refund-title {
+      color: #27ae60;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    
+    .refund-text {
+      color: #155724;
       font-size: 14px;
       line-height: 1.5;
     }
@@ -1475,10 +1375,6 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
     
     .detail-row:last-child {
       border-bottom: none;
-      font-weight: 600;
-      background: rgba(212, 175, 55, 0.05);
-      margin: 0 -20px -20px -20px;
-      padding: 15px 20px;
     }
     
     .label {
@@ -1522,88 +1418,6 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
       font-size: 14px;
     }
     
-    .refund-notice {
-      background: linear-gradient(135deg, #d5f4e6 0%, #c3f0ca 100%);
-      border: 1px solid #27ae60;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 25px;
-      text-align: center;
-    }
-    
-    .refund-title {
-      color: #27ae60;
-      font-weight: 700;
-      font-size: 16px;
-      margin-bottom: 8px;
-    }
-    
-    .refund-text {
-      color: #155724;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    
-    .next-steps {
-      background: #e3f2fd;
-      border: 1px solid #bbdefb;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 25px;
-    }
-    
-    .next-steps-title {
-      color: #1565c0;
-      font-weight: 600;
-      font-size: 16px;
-      margin-bottom: 15px;
-    }
-    
-    .steps-list {
-      color: #1565c0;
-      font-size: 14px;
-      line-height: 1.6;
-      margin-left: 0;
-      padding-left: 0;
-      list-style: none;
-    }
-    
-    .steps-list li {
-      margin-bottom: 8px;
-      padding-left: 20px;
-      position: relative;
-    }
-    
-    .steps-list li::before {
-      content: '•';
-      color: #1565c0;
-      font-weight: bold;
-      position: absolute;
-      left: 0;
-    }
-    
-    .support-info {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-      padding: 20px;
-      border-radius: 8px;
-      text-align: center;
-      color: #495057;
-      font-weight: 500;
-      margin-bottom: 30px;
-    }
-    
-    .support-title {
-      font-weight: 600;
-      color: #2c3e50;
-      margin-bottom: 10px;
-    }
-    
-    .support-link {
-      color: #d4af37;
-      text-decoration: none;
-      font-weight: 600;
-    }
-    
     .footer {
       font-size: 13px;
       color: #888;
@@ -1617,70 +1431,6 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
       color: #d4af37;
       text-decoration: none;
     }
-    
-    /* Mobile Responsive */
-    @media (max-width: 600px) {
-      body {
-        padding: 10px 0;
-      }
-      
-      .email-container {
-        border-radius: 0;
-        margin: 0;
-      }
-      
-      .content, .footer {
-        padding: 25px 20px;
-      }
-      
-      .brand {
-        font-size: 20px;
-      }
-      
-      .failed-amount {
-        font-size: 24px;
-      }
-      
-      .detail-row {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 10px 0;
-      }
-      
-      .value {
-        max-width: 100%;
-        text-align: left;
-        margin-top: 5px;
-        font-weight: 700;
-      }
-      
-      .section-content {
-        padding: 15px;
-      }
-      
-      .detail-row:last-child {
-        margin: 0 -15px -15px -15px;
-        padding: 12px 15px;
-      }
-      
-      .reason-card, .refund-notice, .next-steps, .support-info {
-        padding: 15px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .greeting {
-        font-size: 16px;
-      }
-      
-      .failed-text {
-        font-size: 14px;
-      }
-      
-      .failed-amount {
-        font-size: 20px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -1690,17 +1440,17 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
       <div class="title">Bank Transfer Failed</div>
 
       <div class="greeting">
-        Hello <strong>${FirstName}</strong>,
+        Hello <strong>${userInfo.FirstName}</strong>,
       </div>
 
       <div class="failed-badge">
         <div class="failed-text">Transfer Failed</div>
-        <div class="failed-amount">₦${amount.toLocaleString()}</div>
+        <div class="failed-amount">₦${transactionData.amount.toLocaleString()}</div>
       </div>
 
       <div class="reason-card">
         <div class="reason-title">Reason for Failure</div>
-        <div class="reason-text">${failureReason || 'The transfer could not be completed due to a technical issue. Please try again or contact support if the problem persists.'}</div>
+        <div class="reason-text">${transactionData.failureReason || 'The transfer could not be completed due to a technical issue. Please try again or contact support if the problem persists.'}</div>
       </div>
 
       <div class="refund-notice">
@@ -1713,23 +1463,23 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
         <div class="section-content">
           <div class="detail-row">
             <div class="label">Attempted Amount</div>
-            <div class="value amount-value">₦${amount.toLocaleString()}</div>
+            <div class="value amount-value">₦${transactionData.amount.toLocaleString()}</div>
           </div>
           <div class="detail-row">
             <div class="label">Transaction Fee</div>
-            <div class="value">${fee > 0 ? `₦${fee.toLocaleString()}` : 'FREE'}</div>
+            <div class="value">${transactionData.fee > 0 ? `₦${transactionData.fee.toLocaleString()}` : 'FREE'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Amount Refunded</div>
-            <div class="value amount-value">₦${totalDeduction.toLocaleString()}</div>
+            <div class="value amount-value">₦${transactionData.totalDeduction.toLocaleString()}</div>
           </div>
           <div class="detail-row">
             <div class="label">Current Balance</div>
-            <div class="value balance-value">₦${(userWallet.balance).toLocaleString()}</div>
+            <div class="value balance-value">₦${(userWallet?.balance || 0).toLocaleString()}</div>
           </div>
           <div class="detail-row">
             <div class="label">Transaction ID</div>
-            <div class="value reference-value">${reference}</div>
+            <div class="value reference-value">${transactionData.reference}</div>
           </div>
           <div class="detail-row">
             <div class="label">Status</div>
@@ -1755,39 +1505,21 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
         <div class="section-content">
           <div class="detail-row">
             <div class="label">Recipient Name</div>
-            <div class="value">${recipient.accountName}</div>
+            <div class="value">${transactionData.recipient.accountName || 'N/A'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Account Number</div>
-            <div class="value">${recipient.accountNumber}</div>
+            <div class="value">${transactionData.recipient.accountNumber || 'N/A'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Bank</div>
-            <div class="value">${recipient.bankName}</div>
+            <div class="value">${transactionData.recipient.bankName || 'N/A'}</div>
           </div>
           <div class="detail-row">
             <div class="label">Narration</div>
-            <div class="value">${narration || 'SwiftPay Bank Transfer'}</div>
+            <div class="value">${transactionData.narration}</div>
           </div>
         </div>
-      </div>
-
-      <div class="next-steps">
-        <div class="next-steps-title">What to do next:</div>
-        <ul class="steps-list">
-          <li>Verify the recipient's account details are correct</li>
-          <li>Check if the recipient's bank is currently available</li>
-          <li>Ensure you have sufficient balance for the transfer</li>
-          <li>Try the transfer again in a few minutes</li>
-          <li>Contact our support team if the issue persists</li>
-        </ul>
-      </div>
-
-      <div class="support-info">
-        <div class="support-title">Need Help?</div>
-        <div>Our support team is here to assist you.<br/>
-        Contact us at <a href="mailto:support@swiftpay.com" class="support-link">support@swiftpay.com</a><br/>
-        Or call: <a href="tel:+2348012345678" class="support-link">+234 801 234 5678</a></div>
       </div>
     </div>
 
@@ -1798,14 +1530,17 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
   </div>
 </body>
 </html>
-                `
-            )
-        });
+                    `
+                );
+            });
+        }
     } catch (error) {
-        console.error(`Failed to send email for transaction: ${webhookReference}`, error);
+        console.error(`Error processing failed transfer: ${failedReference}`, error);
         throw error;
+    } finally {
+        await session.endSession();
     }
-}
+};
 
 //virtual account deposit success handler
 const VirtualAccountTransferSuccess = async(data, event) => {
