@@ -97,7 +97,8 @@ const handleKorapayWebhook = async (req, res) => {
                     ]
                 },
                 { 'metadata.webhookEvent': webhookData.event },
-                { status: webhookData.event === 'charge.success' ? 'success' : 'failed' }
+                { status: webhookData.event === 'charge.success' ? 'success' : 
+                          webhookData.event === 'transfer.success' ? 'success' : 'failed' }
             ]
         });
         
@@ -647,7 +648,7 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
 
             console.log(`Processing transfer success: ${webhookReference}`);
             
-            //find transaction
+            // First check if transaction is already successful
             const transaction = await transactions.findOne({
                 $or: [
                     { reference: webhookReference },
@@ -660,10 +661,34 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                 throw new Error(`Transaction not found: ${webhookReference}`);
             }
 
+            // If transaction is already successful, skip processing
+            if(transaction.status === 'success') {
+                console.log(`⏭️ SKIPPING: Transaction ${webhookReference} is already successful`);
+                return;
+            }
+
+            console.log(`Webhook event: ${webhookEvent}, Transaction status: ${transaction.status}`);
+
+            //check if this webhook event was already processed
+            const existingAdminTx = await AdminTransaction.findOne({
+                $or: [
+                    { reference: webhookReference },
+                    { korapayReference: webhookReference }
+                ],
+                'metadata.webhookEvent': webhookEvent,
+                status: 'success'
+            }).session(session);
+
+            if(existingAdminTx) {
+                console.log(`⏭️ SKIPPING: Admin transaction already exists for webhook event: ${webhookEvent} with reference: ${webhookReference}`);
+                return; // EXIT EARLY - don't do anything else
+            }
+
             // Store user info and transaction data for email sending
             userInfo = {
                 FirstName: transaction.userId.FirstName || "Customer",
-                Email: transaction.userId.Email
+                Email: transaction.userId.Email,
+                userId: transaction.userId._id
             };
             transactionData = {
                 amount: transaction.amount,
@@ -673,25 +698,6 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                 recipient: transaction.metadata?.recipient || {},
                 narration: transaction.metadata?.narration || 'SwiftPay Bank Transfer'
             };
-
-            //check if this webhook event was already processed
-            const existingAdminTx = await AdminTransaction.findOne({
-                $and: [
-                    {
-                        $or: [
-                            { reference: webhookReference },
-                            { korapayReference: webhookReference }
-                        ]
-                    },
-                    { 'metadata.webhookEvent': webhookEvent },
-                    { status: 'success' }
-                ]
-            }).session(session);
-
-            if(existingAdminTx) {
-                console.log(`SKIPPING: Admin transaction already exists for webhook event: ${webhookEvent} with reference: ${webhookReference}`);
-                return; // EXIT EARLY - don't do anything else
-            }
 
             //update main transaction if not already successful
             if(transaction.status !== 'success') {
@@ -744,10 +750,10 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                         processingId: `${webhookEvent}-${webhookReference}-${Date.now()}`
                     }
                 }], { session });
-                console.log(` Created admin transaction for: ${webhookReference}`);
+                console.log(`✅ Created admin transaction for: ${webhookReference}`);
             } catch (duplicateError) {
                 if (duplicateError.code === 11000) {
-                    console.log(`Admin transaction already exists for: ${webhookReference} (duplicate key ignored)`);
+                    console.log(`⏭️ Admin transaction already exists for: ${webhookReference} (duplicate key ignored)`);
                 } else {
                     throw duplicateError; // Re-throw if it's not a duplicate key error
                 }
@@ -1127,16 +1133,12 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
 
             // Check if this webhook event was already processed
             const existingAdminTx = await AdminTransaction.findOne({
-                $and: [
-                    {
-                        $or: [
-                            { reference: reference },
-                            { korapayReference: reference }
-                        ]
-                    },
-                    { 'metadata.webhookEvent': webhookEvent },
-                    { status: 'failed' }
-                ]
+                $or: [
+                    { reference: reference },
+                    { korapayReference: reference }
+                ],
+                'metadata.webhookEvent': webhookEvent,
+                status: 'failed'
             }).session(session);
 
             if (existingAdminTx) {
