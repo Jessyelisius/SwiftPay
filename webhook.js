@@ -1544,11 +1544,11 @@ const VirtualAccountTransferSuccess = async(data, event) => {
    
         //check if already processed
         const existingTransaction = await transactions.findOne({
-          reference: reference
+          reference: data.reference
         }).session(session);
 
         if (existingTransaction) {
-            console.log(`Transaction already exists: ${reference} and its processed`);
+            console.log(`Transaction already exists: ${data.reference} and its processed`);
             await session.abortTransaction();
             return;
         }
