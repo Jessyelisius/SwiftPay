@@ -728,7 +728,7 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                 { session }
             );
               // Use upsert to handle duplicates gracefully and avoid duplicate entries
-            const adminTxResult = await AdminTransaction.updateOne(
+            const adminTxResult = await AdminTransaction.findOneAndUpdate(
                 {
                     $or: [
                         { reference: webhookReference },
@@ -758,7 +758,11 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                         }
                     }
                 },
-                { upsert: true, session }
+                { upsert: true, 
+                  new: true,
+                  session,
+                  setDefaultsOnInsert: true  // Ensure defaults are set on insert
+                }
             );
 
             if (adminTxResult.upsertedCount > 0) {
@@ -1208,7 +1212,7 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
             );
 
             //use upsert to handle duplicates gracefully and avoid duplicate entries
-            const adminTxResult = await AdminTransaction.updateOne(
+            const adminTxResult = await AdminTransaction.findOneAndUpdate(
                 {
                     $or: [
                         { reference: reference },
@@ -1240,7 +1244,11 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
                         }
                     }
                 },
-                { upsert: true, session }
+                { upsert: true,
+                  new: true,
+                  session,
+                  setDefaultsOnInsert: true
+                }
             );
             if (adminTxResult.upsertedCount > 0) {
                 console.log(`Created new admin transaction for failed transfer: ${reference}`);
