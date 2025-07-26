@@ -60,9 +60,7 @@ const TransactionSchema = new mongoose.Schema({
 });
 
 // Add indexes for better query performance
-// TransactionSchema.index({ userId: 1, createdAt: -1 });
-// TransactionSchema.index({ reference: 1 });
-// TransactionSchema.index({ korapayReference: 1 });
-// TransactionSchema.index({ status: 1 });
+TransactionSchema.index({ userId: 1, createdAt: -1 });
+TransactionSchema.index({ status: 1 }); // Only if not defined in schema
 
 module.exports = mongoose.model('Transaction', TransactionSchema);
