@@ -770,13 +770,8 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
             } else {
                 console.log(`Admin transaction already exists for: ${webhookReference}`);   
             }
-
-            if (adminTxResult.upsertedCount > 0) {
-                console.log(`Created new admin transaction for: ${webhookReference}`);
-            } else {
-                console.log(` Admin transaction already exists for: ${webhookReference}`);
-            }
-           },
+            console.log(`Successfully processed transfer success: ${webhookReference}, Amount: ₦${amount}`);
+          },
         {
           readConcern: { level: 'majority' },
           writeConcern: { w: 'majority' },
@@ -1218,16 +1213,18 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
             );
 
             //use upsert to handle duplicates gracefully and avoid duplicate entries
-            const adminTxResult = await AdminTransaction.findOneAndUpdate(
+            const adminTxResult = await AdminTransaction.findOne(
                 {
                     $or: [
                         { reference: reference },
                         { korapayReference: reference }
                     ],
                     'metadata.webhookEvent': webhookEvent
-                },
-                {
-                    $setOnInsert: {
+                }).session(session);
+
+                if(!adminTxResult) {
+                  try{
+                    await AdminTransaction.create([{
                         userId: transaction.userId._id,
                         transactionId: transaction._id,
                         type: 'transfer',
@@ -1248,20 +1245,19 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
                             webhookProcessedAt: new Date(),
                             webhookEvent: webhookEvent // Idempotency key
                         }
+                    }], { session });
+                    console.log(`Created new admin transaction for failed transfer: ${reference}`);
+                  } catch (error) {
+                    if (error.code === 11000) {
+                        console.log(`Admin transaction already exists for failed transfer: ${reference}`);
+                    } else {
+                        console.error(`Error creating admin transaction for ${reference}:`, error);
                     }
-                },
-                { upsert: true,
-                  new: true,
-                  session,
-                  setDefaultsOnInsert: true
+                  }
+                } else {
+                    console.log(`Admin transaction already exists for failed transfer: ${reference}`);
                 }
-            );
-            if (adminTxResult.upsertedCount > 0) {
-                console.log(`Created new admin transaction for failed transfer: ${reference}`);
-            }
-            else {
-                console.log(`Admin transaction already exists for failed transfer: ${reference}`);
-            }
+                console.log(`✅ Successfully processed failed transfer: ${reference}`);
         }, {
             readConcern: { level: 'majority' },
             writeConcern: { w: 'majority' },
