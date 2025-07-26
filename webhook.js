@@ -1731,10 +1731,9 @@ const VirtualAccountTransferSuccess = async(data, event) => {
                 <div class="alert-header">CREDIT ALERT</div>
                 
                 <p style="text-align: center; color: #111827; font-size: 16px; margin: 10px 0;">
-                    // Dear <strong>${user.FirstName} ${user.LastName}</strong>
                 </p>
                 
-                <div class="amount-display">${depositAmount.toLocaleString()}</div>
+                <div class="amount-display">&#8358;${depositAmount.toLocaleString()}</div>
                 
                 <div class="transaction-info">
                     <div class="info-row">
@@ -1759,7 +1758,7 @@ const VirtualAccountTransferSuccess = async(data, event) => {
                     </div>
                     <div class="info-row">
                         <span class="info-label">Balance:</span>
-                        <span class="info-value">${wallet.balance?.toLocaleString()}</span>
+                        <span class="info-value">&#8358;${wallet.balance?.toLocaleString()}</span>
                     </div>
                 </div>
                 
