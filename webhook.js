@@ -1582,7 +1582,7 @@ const VirtualAccountTransferSuccess = async(data, event) => {
         }
 
         // Calculate net amount ( tho Korapay deducts fees automatically)
-        const depositAmount = data.amount - (data.fee || 0);
+        const depositAmount = data.amount;
 
         //update user's wallet balance
         const wallet = await walletModel.findOneAndUpdate(
