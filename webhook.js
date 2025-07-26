@@ -108,7 +108,7 @@ const handleKorapayWebhook = async (req, res) => {
         }
         
         // Process webhook with retry logic
-        await withRetry(async () => {
+        // await withRetry(async () => {
             // if (webhookData.event === "charge.success") {
             //     await handleSuccessfulCharge(webhookData.data, webhookData.event);
             if (webhookData.event === "charge.success") {
@@ -128,7 +128,7 @@ const handleKorapayWebhook = async (req, res) => {
             } else {
                 console.log(`Unhandled event type: ${webhookData.event}`);
             }
-        });
+        // });
     
         return res.status(200).json({ received: true });
 
@@ -663,7 +663,7 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
 
             // If transaction is already successful, skip processing
             if(transaction.status === 'success') {
-                console.log(`⏭️ SKIPPING: Transaction ${webhookReference} is already successful`);
+                console.log(`SKIPPING: Transaction ${webhookReference} is already successful`);
                 return;
             }
 
@@ -680,8 +680,8 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
             }).session(session);
 
             if(existingAdminTx) {
-                console.log(`⏭️ SKIPPING: Admin transaction already exists for webhook event: ${webhookEvent} with reference: ${webhookReference}`);
-                return; // EXIT EARLY - don't do anything else
+                console.log(`SKIPPING: Admin transaction already exists for webhook event: ${webhookEvent} with reference: ${webhookReference}`);
+                // return; // exit don't do anything else
             }
 
             // Store user info and transaction data for email sending
@@ -727,43 +727,51 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                 },
                 { session }
             );
-
-            // Use try-catch for insert to handle duplicates gracefully
-            try {
-                await AdminTransaction.create([{
-                    userId: transaction.userId._id,
-                    transactionId: transaction._id,
-                    type: 'transfer',
-                    method: 'bank_transfer',
-                    amount: amount,
-                    currency: currency || 'NGN',
-                    status: 'success',
-                    reference: webhookReference,
-                    korapayReference: webhookReference,
-                    description: `Bank transfer - ${webhookReference}`,
-                    metadata: {
-                        paymentGateway: 'korapay',
-                        originalAmount: amount * 100,
-                        processedVia: 'webhook',
-                        webhookProcessedAt: new Date(),
-                        webhookEvent: webhookEvent, // Idempotency key
-                        processingId: `${webhookEvent}-${webhookReference}-${Date.now()}`
+              // Use upsert to handle duplicates gracefully and avoid duplicate entries
+            const adminTxResult = await AdminTransaction.updateOne(
+                {
+                    $or: [
+                        { reference: webhookReference },
+                        { korapayReference: webhookReference }
+                    ],
+                    'metadata.webhookEvent': webhookEvent
+                },
+                {
+                    $setOnInsert: {
+                        userId: transaction.userId._id,
+                        transactionId: transaction._id,
+                        type: 'transfer',
+                        method: 'bank_transfer',
+                        amount: amount,
+                        currency: currency || 'NGN',
+                        status: 'success',
+                        reference: webhookReference,
+                        korapayReference: webhookReference,
+                        description: `Bank transfer - ${webhookReference}`,
+                        metadata: {
+                            paymentGateway: 'korapay',
+                            originalAmount: amount * 100,
+                            processedVia: 'webhook',
+                            webhookProcessedAt: new Date(),
+                            webhookEvent: webhookEvent,
+                            processingId: `${webhookEvent}-${webhookReference}-${Date.now()}`
+                        }
                     }
-                }], { session });
-                console.log(`✅ Created admin transaction for: ${webhookReference}`);
-            } catch (duplicateError) {
-                if (duplicateError.code === 11000) {
-                    console.log(`⏭️ Admin transaction already exists for: ${webhookReference} (duplicate key ignored)`);
-                } else {
-                    throw duplicateError; // Re-throw if it's not a duplicate key error
-                }
+                },
+                { upsert: true, session }
+            );
+
+            if (adminTxResult.upsertedCount > 0) {
+                console.log(`Created new admin transaction for: ${webhookReference}`);
+            } else {
+                console.log(` Admin transaction already exists for: ${webhookReference}`);
             }
-            console.log(`Successfully processed transfer success: ${webhookReference}`);
-        },
+           },
         {
-            readConcern: { level: 'majority' },
-            writeConcern: { w: 'majority' },
-            readPreference: 'primary'
+          readConcern: { level: 'majority' },
+          writeConcern: { w: 'majority' },
+          readPreference: 'primary',
+          maxTimeMS: 30000 // Add timeout
         });
 
         // Send success email outside of transaction
@@ -1077,6 +1085,7 @@ const handleTransferSuccess = async(data, webhookEvent = null) => {
                 `
                 );
             });
+            console.log(`Success email sent to: ${userInfo.Email}`);
         }
     } catch (error) {
         console.error(`Error processing transfer success: ${webhookReference}`, error);
@@ -1142,8 +1151,8 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
             }).session(session);
 
             if (existingAdminTx) {
-                console.log(`⏭️ SKIPPING: Failed transfer webhook already processed for: ${reference}`);
-                return; // EXIT EARLY - don't do anything else
+                console.log(`SKIPPING: Failed transfer webhook already processed for: ${reference}`);
+                // return; // EXIT EARLY - don't do anything else
             }
 
             // Update main transaction if not already failed
@@ -1198,44 +1207,52 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
                 { session }
             );
 
-            // Use try-catch for insert to handle duplicates gracefully
-            try {
-                await AdminTransaction.create([{
-                    userId: transaction.userId._id,
-                    transactionId: transaction._id,
-                    type: 'transfer',
-                    method: 'bank_transfer',
-                    amount: transaction.amount,
-                    currency: 'NGN',
-                    status: 'failed',
-                    reference: reference,
-                    korapayReference: reference,
-                    description: `Failed bank transfer - ${reference}`,
-                    failureReason: reason,
-                    metadata: {
-                        paymentGateway: 'korapay',
-                        refundProcessed: true,
-                        refundAmount: totalDeduction,
-                        processedVia: 'webhook',
-                        failureDetails: reason,
-                        webhookProcessedAt: new Date(),
-                        webhookEvent: webhookEvent // Idempotency key
+            //use upsert to handle duplicates gracefully and avoid duplicate entries
+            const adminTxResult = await AdminTransaction.updateOne(
+                {
+                    $or: [
+                        { reference: reference },
+                        { korapayReference: reference }
+                    ],
+                    'metadata.webhookEvent': webhookEvent
+                },
+                {
+                    $setOnInsert: {
+                        userId: transaction.userId._id,
+                        transactionId: transaction._id,
+                        type: 'transfer',
+                        method: 'bank_transfer',
+                        amount: transaction.amount,
+                        currency: 'NGN',
+                        status: 'failed',
+                        reference: reference,
+                        korapayReference: reference,
+                        description: `Failed bank transfer - ${reference}`,
+                        failureReason: reason,
+                        metadata: {
+                            paymentGateway: 'korapay',
+                            refundProcessed: true,
+                            refundAmount: totalDeduction,
+                            processedVia: 'webhook',
+                            failureDetails: reason,
+                            webhookProcessedAt: new Date(),
+                            webhookEvent: webhookEvent // Idempotency key
+                        }
                     }
-                }], { session });
-                console.log(`✅ Created failed admin transaction for: ${reference}`);
-            } catch (duplicateError) {
-                if (duplicateError.code === 11000) {
-                    console.log(`⏭️ Failed admin transaction already exists for: ${reference} (duplicate key ignored)`);
-                } else {
-                    throw duplicateError; // Re-throw if it's not a duplicate key error
-                }
+                },
+                { upsert: true, session }
+            );
+            if (adminTxResult.upsertedCount > 0) {
+                console.log(`Created new admin transaction for failed transfer: ${reference}`);
             }
-
-            console.log(`✅ Successfully processed failed transfer: ${reference}`);
+            else {
+                console.log(`Admin transaction already exists for failed transfer: ${reference}`);
+            }
         }, {
             readConcern: { level: 'majority' },
             writeConcern: { w: 'majority' },
-            readPreference: 'primary'
+            readPreference: 'primary',
+            maxTimeMS: 30000 // Add timeout
         });
 
         // Send failure email outside transaction
@@ -1564,6 +1581,7 @@ const handleTransferFailed = async(data, webhookEvent = null) => {
                     `
                 );
             });
+            console.log(`Failure email sent to: ${userInfo.Email}`);
         }
     } catch (error) {
         console.error(`Error processing failed transfer: ${failedReference}`, error);
