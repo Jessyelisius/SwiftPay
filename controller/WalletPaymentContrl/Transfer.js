@@ -255,7 +255,7 @@ const Transfer = async (req, res) => {
         }
 
         // await session.abortTransaction();
-        res.status(500).json({
+         return res.status(500).json({
             Access: false,
             Error: true,
             Message: 'Transfer failed',
