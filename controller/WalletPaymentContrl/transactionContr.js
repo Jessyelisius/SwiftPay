@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const transactionModel = require("../../model/transactionModel");
 const walletModel = require("../../model/walletModel");
 const { ErrorDisplay } = require("../../utils/random.util");
@@ -73,7 +74,7 @@ const getTransactionHistory = async(req, res)=>{
         //calculate pagination details (not required but useful for frontend, cox na me de do fe)
         const totalPages = Math.ceil(totalCount / limitNum);
         const hasNextPage = page < totalPages;
-        const hasPreviousPage = page > 1;
+        const hasPrevPage = page > 1;
 
         //calculate user summary statistics for user
         const summaryStats = await transactionModel.aggregate([
@@ -241,6 +242,8 @@ const getUserTransactionSummary = async(req, res) => {
                     userId: new mongoose.Types.ObjectId(user._id),
                     createdAt: { $gte: startDate }
                 },
+            },
+            { 
                 $group:{
                     _id: {type: '$type', currency: '$currency'},
                     totalAmount: {$sum: '$amount'},
@@ -274,7 +277,7 @@ const getUserTransactionSummary = async(req, res) => {
             }
         ]);
         /// Get all user wallets (NGN and USD if they exist)
-        const wallets = await walletModel.find({ userId: user._id }, 'balance currency').lean();
+        const userWallets = await walletModel.find({ userId: user._id }, 'balance currency').lean();
 
             console.log('=== USER TRANSACTION SUMMARY ===');
         console.log(`User: ${user.FirstName} ${user.LastName}`);

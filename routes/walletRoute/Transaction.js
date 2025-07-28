@@ -22,7 +22,7 @@ router.post('/bank_transfer', verifyUserJwt, Transfer);
 
 //history routes
 router.get('/all', verifyUserJwt, getTransactionHistory);
-router.get('/history/:transactionId', verifyUserJwt, getSingleTransaction);
+router.get('/singleTransact/:transactionId', verifyUserJwt, getSingleTransaction);
 router.get('/summary', verifyUserJwt, getUserTransactionSummary);
 
 
