@@ -21,7 +21,7 @@ router.post('/bank_transfer', verifyUserJwt, Transfer);
 
 
 //history routes
-router.get('/allHistory', verifyUserJwt, getTransactionHistory);
+router.get('/all', verifyUserJwt, getTransactionHistory);
 router.get('/history/:transactionId', verifyUserJwt, getSingleTransaction);
 router.get('/summary', verifyUserJwt, getUserTransactionSummary);
 

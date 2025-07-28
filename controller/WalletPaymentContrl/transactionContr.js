@@ -4,7 +4,7 @@ const { ErrorDisplay } = require("../../utils/random.util");
 
 
 // Get user's transaction history with pagination and filtering
-const getTransactionHistory = async()=>{
+const getTransactionHistory = async(req, res)=>{
     try {
         const user = req.user;
 
@@ -12,9 +12,9 @@ const getTransactionHistory = async()=>{
             return res.status(401).json({ Error: true, Message: "Unauthorized || user not found" });
         }
 
-        if(!user?.isKYCVerified) {
-            return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
-        }
+        // if(!user?.isKYCVerified) {
+        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        // }
 
         if(!user?.EmailVerif) {
             return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
@@ -91,7 +91,7 @@ const getTransactionHistory = async()=>{
                     failedTransactions: {
                         $sum: {$cond: [{$eq: ['$status', 'failed']}, 1, 0]}
                     },
-                    totalFeesPaid: {$ifNull: ['$metadata.fee', 0]} // Assuming feesPaid is stored in metadata
+                    totalFeesPaid: {$sum:{ $ifNull: ['$metadata.fee', 0]}} // Assuming feesPaid is stored in metadata
                 }
             }
         ]);
@@ -148,17 +148,18 @@ const getTransactionHistory = async()=>{
 }
 
 //get user specific transaction detail
-const getSingleTransaction = async() => {
+const getSingleTransaction = async(req, res) => {
     try {
         const user = req.user;
-        
+        const { transactionId } = req.params;
+
         if(!user){
             return res.status(401).json({ Error: true, Message: "Unauthorized || user not found" });
         }
 
-        if(!user?.isKYCVerified) {
-            return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
-        }
+        // if(!user?.isKYCVerified) {
+        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        // }
 
         if(!user?.EmailVerif) {
             return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
@@ -209,7 +210,7 @@ const getSingleTransaction = async() => {
 
 
 // get user transaction summary
-const getUserTransactionSummary = async() => {
+const getUserTransactionSummary = async(req, res) => {
     try {
         const user = req.user;
 
@@ -217,9 +218,9 @@ const getUserTransactionSummary = async() => {
             return res.status(401).json({ Error: true, Message: "Unauthorized || user not found" });
         }
 
-        if(!user?.isKYCVerified) {
-            return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
-        }
+        // if(!user?.isKYCVerified) {
+        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        // }
 
         if(!user?.EmailVerif) {
             return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
