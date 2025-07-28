@@ -26,9 +26,9 @@ const Transfer = async (req, res) => {
             return res.status(401).json({Error: true, Message: "Unauthorized || user not found" });
         }
 
-        // if(!user?.isKYCVerified) {
-        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
-        // }
+        if(!user?.isKYCVerified) {
+            return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        }
 
         if(!user?.EmailVerif) {
             return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
