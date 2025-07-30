@@ -633,7 +633,6 @@ const sendFailureEmail = async (data) => {
     }
 };
 
-
 ///transfer secetion
 const handleTransferSuccess = async(data, webhookEvent = null) => {
     const session = await mongoose.startSession();

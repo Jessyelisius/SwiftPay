@@ -13,9 +13,9 @@ const getTransactionHistory = async(req, res)=>{
             return res.status(401).json({ Error: true, Message: "Unauthorized || user not found" });
         }
 
-        // if(!user?.isKYCVerified) {
-        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
-        // }
+        if(!user?.isKYCVerified) {
+            return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        }
 
         if(!user?.EmailVerif) {
             return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
@@ -158,9 +158,9 @@ const getSingleTransaction = async(req, res) => {
             return res.status(401).json({ Error: true, Message: "Unauthorized || user not found" });
         }
 
-        // if(!user?.isKYCVerified) {
-        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
-        // }
+        if(!user?.isKYCVerified) {
+            return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        }
 
         if(!user?.EmailVerif) {
             return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
@@ -209,7 +209,6 @@ const getSingleTransaction = async(req, res) => {
     }
 }
 
-
 // get user transaction summary
 const getUserTransactionSummary = async(req, res) => {
     try {
@@ -219,9 +218,9 @@ const getUserTransactionSummary = async(req, res) => {
             return res.status(401).json({ Error: true, Message: "Unauthorized || user not found" });
         }
 
-        // if(!user?.isKYCVerified) {
-        //     return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
-        // }
+        if(!user?.isKYCVerified) {
+            return res.status(403).json({Error: true, Message: "Forbidden || KYC not verified" });
+        }
 
         if(!user?.EmailVerif) {
             return res.status(403).json({Error: true, Message: "Forbidden || Email not verified" });
