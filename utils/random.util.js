@@ -212,8 +212,12 @@ const calculateTransactionFee = (type, amount, existingWeeklyTransfers = []) => 
         fee = Math.min(2500, Math.max(100, amt * 0.014));
     } else if (type === 'virtual_account') {
         fee = amt <= 10000 ? 0 : 10;
-    } else if (type === 'usd_to_ngn' || type === 'coin_to_ngn') {
+    } else if (type === 'usd_to_ngn' || type === 'coin_to_ngn' || type === 'ngn_to_usd') {
         fee = amt * 0.005;
+    }else if (type === 'crypto_withdrawal') {
+        fee = Math.min(1000, Math.max(200, amt * 0.01)); // 1% fee, min ₦200, max ₦1000
+    } else if (type === 'crypto_conversion') {
+        fee = amt * 0.003; // 0.3% fee for crypto-to-crypto
     }
     
     return Math.ceil(fee);
@@ -232,6 +236,216 @@ const getWeeklyTransfers = async (userId) => {
         createdAt: { $gte: startOfWeek }
     });
 };
+
+// Helper function to get fee based on type with minimum threshold
+const getConversionFeeByType = (feeType, amount) => {
+    const feePercentages = {
+        usd_to_ngn: 1.5,
+        ngn_to_usd: 2,
+        coin_to_ngn: 2.5,
+        crypto_conversion: 1
+    };
+
+    const minimumFees = {
+        usd_to_ngn: 50,           // ₦50 minimum
+        ngn_to_usd: 100,          // ₦100 minimum
+        coin_to_ngn: 150,         // ₦150 minimum
+        crypto_conversion: 50     // ₦50 minimum
+    };
+
+    const percentage = feePercentages[feeType] || 1.5;
+    const minFee = minimumFees[feeType] || 50;
+
+    const rawFee = (percentage / 100) * amount;
+    const finalFee = Math.max(Math.ceil(rawFee), minFee);
+
+    return finalFee;
+};
+
+//calculating the currency based on the currencies involved
+const calculateConversionFee = (amount, fromCurrency, toCurrency) => {
+    let feeType;
+
+    //determine fee type base on conversion pair
+    if(fromCurrency === 'USD' && toCurrency === 'NGN'){
+        feeType = 'usd_to_ngn';
+    }else if(fromCurrency === 'NGN' && toCurrency === 'USD'){
+        feeType = 'ngn_to_usd';
+    }else if(['BTC', 'ETH', 'LTC', 'BNB', 'ADA', 'XRP', 'USDT', 'USDC'].includes(fromCurrency) && toCurrency === 'NGN'){
+        feeType = 'coin_to_ngn'; //based on coin->usd->ngn
+    }else if(fromCurrency === 'NGN' && ['BTC', 'ETH', 'LTC', 'BNB', 'ADA', 'XRP', 'USDT', 'USDC'].includes(toCurrency)){
+        feeType = 'ngn_to_usd'; //treat as NGN to Crypto
+    }else if(['BTC', 'ETH', 'LTC', 'BNB', 'ADA', 'XRP', 'USDT', 'USDC'].includes(fromCurrency) &&
+        ['BTC', 'ETH', 'LTC', 'BNB', 'ADA', 'XRP', 'USDT', 'USDC'].includes(toCurrency)){
+        feeType = 'crypto_conversion' //crypto to crypto
+    }else{
+        feeType = 'usd_to_ngn'; // Default fallback
+    }
+
+     const fee = getConversionFeeByType(feeType, amount);
+
+    return {
+        fee,
+        feeType
+    };
+};
+
+//calculate crypto withdrawal fee(service fee + network fee)
+const calculateWithdrawalFee = (amount, currency, network = null) => {
+    //service fee using our function(treat as international transfer)
+    const serviceFee = calculateTransactionFee('crypto_withdrawal', amount);
+
+    //network fee (blockchain fees)
+    const networkFees = {
+        BTC: 0.0001,
+        ETH: 0.002,
+        LTC: 0.001,
+        BNB: 0.0005,
+        ADA: 1.0,
+        XRP: 0.00001,
+        USDT: 0.002, // ETH network default
+        USDC: 0.002  // ETH network default
+    }
+
+     // Network multipliers for different chains
+    const networkMultipliers = {
+        'Ethereum': 1.0,
+        'ERC20': 1.0,
+        'BSC': 0.1,
+        'BEP20': 0.1,
+        'Tron': 0.05,
+        'TRC20': 0.05,
+        'Polygon': 0.01
+    };
+
+    const baseNetworkFee = networkFees[currency] || 0.001;
+    const multipliers =networkMultipliers[network] || 1.0;
+    const networkFee = baseNetworkFee * multipliers;
+
+    return {
+        serviceFee,
+        networkFee,
+        totalFee:serviceFee * networkFee,
+        // totalFee: `totalFeeFiat: ${serviceFee}, totalFeeCrypto: ${networkFee}`,
+        feeType: 'crypto_withdrawal'
+    };
+};
+
+//get fee estimate before transaction
+const getFeeEstimate = async(userId, type, amount, fromCurrency = null, toCurrency = null) => {
+    try {
+        let feeEstimate = {}
+        
+        if(type === 'conversion'){
+            const conversionFee = calculateConversionFee(amount, fromCurrency, toCurrency)
+            feeEstimate = {
+                type: 'conversion',
+                serviceFee: conversionFee.fee,
+                feeType: conversionFee.feeType,
+                totalFee: conversionFee.fee,
+                feePercentage: (conversionFee.fee / amount * 100).toFixed(2)
+            }
+        }else if(type === 'crypto_withdrawal'){
+            const withdrawalFee = calculateWithdrawalFee(amount, fromCurrency);
+            feeEstimate = {
+                type: 'crypto_withdrawal',
+                serviceFee:withdrawalFee.serviceFee,
+                networkFee:withdrawalFee.networkFee,
+                totalFee:withdrawalFee.totalFee,
+                feeType:withdrawalFee.feeType,
+                feePercentage: (withdrawalFee.totalFee / amount * 100).toFixed(2)
+            }
+        }else{
+            // Using existing fee calculation for other types
+            const weeklyTransfers = await getWeeklyTransfers(userId);
+            const fee = calculateTransactionFee(type, amount, weeklyTransfers);
+            feeEstimate = {
+                type: type,
+                serviceFee: fee,
+                totalFee: fee,
+                feeType: type,
+                feePercentage: (fee / amount * 100).toFixed(2),
+                weeklyTransfersUsed: weeklyTransfers.length
+            };
+        }
+
+        return feeEstimate;
+    } catch (error) {
+         console.error('Error calculating fee estimate:', error.message);
+        throw new Error(`Failed to calculate fee estimate: ${error.message}`);
+    }
+};
+
+//calculate total fee collected
+const calculateRevenueFromFees = async(startDate, endDate) => {
+    try {
+        const revenue = await transactionModel.aggregate([
+            {
+                $match:{
+                    status: 'success',
+                    createdAt: {
+                        $gte: new Date(startDate),
+                        $lte: new Date(endDate)
+                    },
+                    $or: [
+                        { 'metadata.conversionFee': { $exists: true, $gt: 0 } },
+                        { 'cryptoDetails.serviceFee': { $exists: true, $gt: 0 } },
+                        { 'metadata.serviceFee': { $exists: true, $gt: 0 } }
+                    ]
+                }
+            },
+            {
+                $group:{
+                    _id: null,
+                    totalConversionFees: {
+                        $sum: {
+                            $ifNull: ['$metadata.conversionFee', 0]
+                        }
+                    },
+                    totalServiceFees: {
+                        $sum: {
+                            $ifNull: ['$cryptoDetails.serviceFee', 0]
+                        }
+                    },
+                     totalTransactions: { $sum: 1 },
+                    feesByType: {
+                        $push: {
+                            type: '$metadata.feeType',
+                            fee: {
+                                $add: [
+                                    { $ifNull: ['$metadata.conversionFee', 0] },
+                                    { $ifNull: ['$cryptoDetails.serviceFee', 0] }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
+        if (revenue.length === 0) {
+            return {
+                totalRevenue: 0,
+                totalConversionFees: 0,
+                totalServiceFees: 0,
+                totalTransactions: 0,
+                period: { startDate, endDate }
+            };
+        }
+        
+        const result = revenue[0];
+        return {
+            totalRevenue: result.totalConversionFees + result.totalServiceFees,
+            totalConversionFees: result.totalConversionFees,
+            totalServiceFees: result.totalServiceFees,
+            totalTransactions: result.totalTransactions,
+            period: { startDate, endDate }
+        };
+    } catch (error) {
+         console.error('Error calculating revenue:', error.message);
+        throw new Error(`Failed to calculate revenue: ${error.message}`);
+    }
+};
+
 
 function ErrorDisplay(error) {
   console.error(error); // Log for debugging, you can remove in production
@@ -258,6 +472,62 @@ function ErrorDisplay(error) {
   return { msg: "An unexpected error occurred. Please try again later." };
 }
 
+//test code
+// const testFeeCalculations = async () => {
+//     try {
+//         console.log('🧮 Testing Fee Calculations...\n');
+
+//         // Test conversion fees
+//         console.log('1. Conversion Fee Tests:');
+//         const conversionTests = [
+//             { amount: 100000, from: 'NGN', to: 'USD' },
+//             { amount: 100, from: 'USD', to: 'NGN' },
+//             { amount: 50000, from: 'NGN', to: 'BTC' },
+//             { amount: 1, from: 'BTC', to: 'USDT' }
+//         ];
+
+//         conversionTests.forEach(test => {
+//             const result = calculateConversionFee(test.amount, test.from, test.to);
+//             console.log(`   ${test.amount} ${test.from} → ${test.to}: ₦${result.fee} (${result.feeType})`);
+//         });
+
+//         // Test withdrawal fees
+//         console.log('\n2. Withdrawal Fee Tests:');
+//         const withdrawalTests = [
+//             { amount: 0.01, currency: 'BTC', network: 'Bitcoin' },
+//             { amount: 0.5, currency: 'ETH', network: 'Ethereum' },
+//             { amount: 100, currency: 'USDT', network: 'TRC20' },
+//             { amount: 1000, currency: 'USDC', network: 'BSC' }
+//         ];
+
+//         withdrawalTests.forEach(test => {
+//             const result = calculateWithdrawalFee(test.amount, test.currency, test.network);
+//             console.log(`   ${test.amount} ${test.currency} (${test.network}):`);
+//             console.log(`     Service Fee: ₦${result.serviceFee}`);
+//             console.log(`     Network Fee: ${result.networkFee} ${test.currency}`);
+//         });
+
+//         // Test fee estimates
+//         console.log('\n3. Fee Estimate Tests:');
+//         const testUserId = '64f7b1234567890123456789';
+        
+//         try {
+//             const conversionEstimate = await getFeeEstimate(testUserId, 'conversion', 100000, 'NGN', 'USD');
+//             console.log('   Conversion Estimate:', conversionEstimate);
+
+//             const withdrawalEstimate = await getFeeEstimate(testUserId, 'crypto_withdrawal', 0.01, 'BTC');
+//             console.log('   Withdrawal Estimate:', withdrawalEstimate);
+//         } catch (error) {
+//             console.log('   Fee estimate tests skipped:', error.message);
+//         }
+
+//         console.log('\n✅ Fee calculation tests completed!');
+
+//     } catch (error) {
+//         console.error('❌ Fee calculation tests failed:', error.message);
+//     }
+// };
+
 // Export functions
 module.exports = {
     generateEncryptionKey,
@@ -270,30 +540,16 @@ module.exports = {
     ErrorDisplay,
     generateId,
     calculateTransactionFee,
-    getWeeklyTransfers
+    getWeeklyTransfers,
+    calculateTransactionFee,
+    calculateWithdrawalFee,
+    calculateConversionFee,
+    getFeeEstimate,
+    calculateRevenueFromFees,
+    testFeeCalculations
 };
 
-// Example usage:
-/*
-// 1. Generate encryption key (do this once and store in .env)
-const encryptionKey = generateEncryptionKey();
-console.log('Store this key in your .env file:');
-console.log('KYC_ENCRYPTION_KEY=' + encryptionKey);
-
-// 2. Encrypt KYC data
-const kycData = {
-    idNumber: '12345678901',
-    idType: 'nin',
-    phone: '09061591601'
-};
-
-const encrypted = encryptKYCData(kycData, encryptionKey);
-console.log('Encrypted KYC data:', encrypted);
-
-// 3. Decrypt KYC data
-const decrypted = decryptKYCData(encrypted, encryptionKey);
-console.log('Decrypted KYC data:', decrypted);
-*/
+// testFeeCalculations();
 
 
 

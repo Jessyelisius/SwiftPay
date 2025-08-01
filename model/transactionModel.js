@@ -14,21 +14,22 @@ const TransactionSchema = new mongoose.Schema({
         type: String,
         required: true,
         // enum:['NGN', 'USD'],
+        enum: ['NGN', 'USD', 'BTC', 'ETH', 'LTC', 'BNB', 'ADA', 'XRP', 'USDT', 'USDC'],
         default: 'NGN'
     },
     method: { 
         type: String, 
-        enum: ['card', 'virtual_account', 'bank_transfer', 'conversion'], 
+        enum: ['card', 'virtual_account', 'bank_transfer', 'conversion', 'crypto_transfer'], 
         default: 'virtual_account' 
     },
     type: { 
         type: String, 
-        enum: ['deposit', 'withdrawal', 'transfer'], 
+        enum: ['deposit', 'withdrawal', 'transfer', 'conversion', 'crypto_send', 'crypto_receive'], 
         required: true 
     },
     status: { 
         type: String, 
-        enum: ['pending', 'success', 'failed'], 
+        enum: ['pending', 'success', 'failed', 'processing'], 
         default: 'pending' 
     },
     reference: { 
@@ -41,7 +42,25 @@ const TransactionSchema = new mongoose.Schema({
         required: false,
         sparse: true // This allows multiple null values while maintaining uniqueness for non-null values
     },
-    // Add this field to your existing TransactionSchema
+    // For crypto transactions
+    cryptoDetails: {
+        fromCurrency: {
+            type: String,
+            enum: ['NGN', 'USD', 'BTC', 'ETH', 'LTC', 'BNB', 'ADA', 'XRP', 'USDT', 'USDC']
+        },
+        toCurrency: {
+            type: String,
+            enum: ['NGN', 'USD', 'BTC', 'ETH', 'LTC', 'BNB', 'ADA', 'XRP', 'USDT', 'USDC']
+        },
+        conversionRate: Number, // Rate used for conversion
+        fromAmount: Number,     // Original amount
+        toAmount: Number,       // Converted amount
+        walletAddress: String,  // For external transfers
+        txHash: String,         // Blockchain transaction hash
+        network: String,        // Blockchain network used
+        gasFee: Number         // Transaction fee (if applicable)
+    },
+    // this field for info about recipient transaction
     recipient: {
         type: {
             accountNumber: String,

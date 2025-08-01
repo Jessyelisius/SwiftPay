@@ -1,4 +1,5 @@
 const { default: axios } = require("axios");
+require('dotenv').config();
 
 const COINGECKO_BASE_URL = 'https://api.coingecko.com/api/v3';
 const OPENEXCHANGE_BASE_URL = 'https://openexchangerates.org/api';
@@ -21,15 +22,17 @@ const cacheExpiry = 30000 //30 secs
 // getting USD -> NGN conversion from Open ExchangeRates
 const fetchUsdToNgnRate = async() => {
     try {
-        const appId = process.env.openExchangeRateAppId;
-        const {data} = await axios.get(`${OPENEXCHANGE_BASE_URL}/latest.json`,{
-            params:{
-                appId: appId,
-                Symbols: 'NGN'
-            }
-        });
+        const appId = '7b5a3b5daed7483191a6d40692e14962';
+        const response = await axios.get(`${OPENEXCHANGE_BASE_URL}/latest.json?app_id=${appId}&symbols=NGN`);
+        const data = response.data;
+        // {
+        //     params:{
+        //         app_id: appId,
+        //         symbols: 'NGN'
+        //     }
+        // };
         
-        const rate = data?.rate?.NGN;
+        const rate = data?.rates?.NGN;
         if(!rate) throw new Error('rate is missing');
         return rate;
 
@@ -45,7 +48,7 @@ const fetchCryptoPrices = async() => {
         const coinIds = Object.values(supportedCoins).join(',');
         const {data} = await axios.get(`${COINGECKO_BASE_URL}/simple/price`,{
             params:{
-                id: coinIds,
+                ids: coinIds,
                 vs_currencies: 'usd,ngn'
             }
         });
@@ -77,7 +80,6 @@ const getPrices = async() => {
     if(now - lastFetch > cacheExpiry){
         return await fetchCryptoPrices();
     }
-
     return priceCache;
 }
 
@@ -98,26 +100,77 @@ const convertCurrency = async(amount, from, to) => {
     if(typeof amount !== 'number' || amount <= 0){
         throw new Error("Amount must be a positive number");
     }
+
+    const prices = await getPrices();
+
+    if(from === 'NGN' && to === 'USD') return await convertNgnToUsd(amount);
+    if(from === 'USD' && to === 'NGN') return await convertUsdToNgn(amount);
+
+    //usd -> cryptocoin
+    if(from === 'USD' && supportedCoins[to]){
+        const rate = prices[to]?.usd;
+        if(!rate) throw new Error(`No rate for ${to}`);
+        return amount / rate;
+    }
+
+    //cryptocoin -> usd
+    if(supportedCoins[from] && to === 'USD'){
+        const rate = prices[from]?.usd;
+        if(!rate) throw new Error(`No rate for ${from}`);
+        return amount * rate;
+    }
+
+    //ngn -> usd -> cryptocoin
+    if(from === 'NGN' && supportedCoins[to]){
+        const usd = await convertNgnToUsd(amount);
+        const rate = prices[to]?.usd;
+        if(!rate) throw new Error(`No rate for ${to}`);
+        return usd / rate; 
+    }
+
+    //cryptocoin -> usd -> ngn
+    if(supportedCoins[from] && to === 'NGN'){
+        const rate = prices[from]?.usd;
+        if(!rate) throw new Error(`No rate for ${from}`);
+        const usd = amount * rate;
+        return await convertUsdToNgn(usd);
+    }
+
+    throw new Error(`Unsupported conversion ${from} to ${to}`);
+    
 }
 
-const prices = await getPrices();
+const getRate = async(from, to) => await convertCurrency(1, from, to);
 
-if(from === 'NGN' && to === 'USD') return await convertNgnToUsd(amount);
-if(from === 'USD' && to === 'NGN') return await convertUsdToNgn(amount);
+// const testconversion = async () => {
+//     const prices = await getPrices();
 
-if(from === 'USD' && supportedCoins[to]){
-    const rate = prices[to]?.usd;
-    if(!rate) throw new Error(`No rate for ${to}`);
-    return amount / rate;
-}
+//     console.log('getting usd/ngn');
+//     const usdngnRate = await fetchUsdToNgnRate();
 
-if(supportedCoins[from] && to === 'USD'){
-    const rate = prices[from]?.usd;
-    if(!rate) throw new Error(`No rate for ${from}`);
-    return amount * rate;
-}
+//     console.log(`✅ 1 USD = ₦${usdngnRate.toFixed(2)}`);
+    
+//     // Test 3: Sample conversions
+//     console.log('\n3. Testing conversions...');
+//     const tests = [
+//       { amount: 100000, from: 'NGN', to: 'BTC' },
+//       { amount: 0.001, from: 'BTC', to: 'USD' },
+//       { amount: 50, from: 'USD', to: 'USDT' },
+//       {amount: 10, from: 'USD', to: 'NGN'}
+//     ];
+    
+//     for (const test of tests) {
+//       const result = await convertCurrency(test.amount, test.from, test.to);
+//       console.log(`✅ ${test.amount} ${test.from} = ${result.toFixed(8)} ${test.to}`);
+//     }
+// }
 
 module.exports = {
-
+    convertCurrency,
+    getRate,
+    fetchUsdToNgnRate,
+    getPrices,
+    testconversion
 }
 
+testconversion();
