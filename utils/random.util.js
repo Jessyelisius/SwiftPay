@@ -546,7 +546,7 @@ module.exports = {
     calculateConversionFee,
     getFeeEstimate,
     calculateRevenueFromFees,
-    testFeeCalculations
+    // testFeeCalculations
 };
 
 // testFeeCalculations();

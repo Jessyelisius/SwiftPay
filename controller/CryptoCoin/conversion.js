@@ -142,35 +142,12 @@ const convertCurrency = async(amount, from, to) => {
 
 const getRate = async(from, to) => await convertCurrency(1, from, to);
 
-// const testconversion = async () => {
-//     const prices = await getPrices();
-
-//     console.log('getting usd/ngn');
-//     const usdngnRate = await fetchUsdToNgnRate();
-
-//     console.log(`✅ 1 USD = ₦${usdngnRate.toFixed(2)}`);
-    
-//     // Test 3: Sample conversions
-//     console.log('\n3. Testing conversions...');
-//     const tests = [
-//       { amount: 100000, from: 'NGN', to: 'BTC' },
-//       { amount: 0.001, from: 'BTC', to: 'USD' },
-//       { amount: 50, from: 'USD', to: 'USDT' },
-//       {amount: 10, from: 'USD', to: 'NGN'}
-//     ];
-    
-//     for (const test of tests) {
-//       const result = await convertCurrency(test.amount, test.from, test.to);
-//       console.log(`✅ ${test.amount} ${test.from} = ${result.toFixed(8)} ${test.to}`);
-//     }
-// }
 
 module.exports = {
     convertCurrency,
     getRate,
     fetchUsdToNgnRate,
     getPrices,
-    testconversion
 }
 
-testconversion();
+// testconversion();
