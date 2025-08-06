@@ -5,6 +5,20 @@ const { ErrorDisplay } = require("../../utils/random.util");
 const createWallet = async(userId) => {
     try {
 
+        //  const userid = userId;
+
+        if(!userId) {
+            throw new Error("Unauthorized || userId not found");
+        }
+
+        if(!userId?.isKYCVerified) {
+           throw new Error("Forbidden || KYC not verified");
+        }
+
+        if(!userId?.EmailVerif) {
+           throw new Error("Forbidden || Email not verified");
+        }
+
         //check if wallet already exist
         const existingWallet = await walletModel.findOne({userId: userId});
         if (existingWallet) {
@@ -243,6 +257,6 @@ module.exports = {
     hasSufficientBalance,
     addExternalWallet,
     getExternalWallet,
-    getWalletSummary,
+    getWalletSummary
     // testWalletOperations
 }

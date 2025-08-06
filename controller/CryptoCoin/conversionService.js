@@ -14,6 +14,18 @@ const processConversion = async(userId, fromCurrency, toCurrency, amount) => {
         if(!userId || !fromCurrency || !toCurrency || !amount){
             throw new Error("All fields are required: userId, amount, fromCurrency, toCurrency");
         }
+        if(!userId) {
+            throw new Error("Unauthorized || userId not found");
+        }
+
+        if(!userId?.isKYCVerified) {
+           throw new Error("Forbidden || KYC not verified");
+        }
+
+        if(!userId?.EmailVerif) {
+           throw new Error("Forbidden || Email not verified");
+        }
+
         if(amount <= 0){
             throw new Error("Amount must be greater than 0");
         }
