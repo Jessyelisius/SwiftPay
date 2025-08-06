@@ -4,6 +4,7 @@ const { CreateVirtualAccount, getVirtualAccountDetails } = require('../../contro
 const Transfer = require('../../controller/WalletPaymentContrl/Transfer');
 const { userBalance } = require('../../controller/WalletPaymentContrl/Balance');
 const { createWallet, getWallet, getBalance, updateBalance, hasSufficientBalance, addExternalWallet, getExternalWallet, getWalletSummary, testWalletOperations } = require('../../controller/CryptoCoin/walletService');
+const { validateWalletAddress, addExternalWalletWithValidation, processCryptoWithdrawal, calculateNetworkFee, getWithdrawalHistory, checkWithdrawalStatus, testCryptoTransferOperations } = require('../../controller/CryptoCoin/cryptoTransferService');
 const router = express.Router();
 
 // Virtual Account routes
@@ -15,5 +16,5 @@ router.get('/balance', verifyUserJwt, userBalance);
 
 //crypto session
 // router.post('/cryptoWallet', verifyUserJwt, createWallet, getWallet, getBalance, updateBalance, hasSufficientBalance, addExternalWallet, getExternalWallet, getWalletSummary, testWalletOperations);
-
+// router.post('/cryptoTransfer', verifyUserJwt, validateWalletAddress, addExternalWalletWithValidation, processCryptoWithdrawal, calculateNetworkFee, getWithdrawalHistory, checkWithdrawalStatus, testCryptoTransferOperations);
 module.exports = router;

@@ -1,6 +1,6 @@
 const transactionModel = require("../../model/transactionModel");
 const { calculateTransactionFee } = require("../../utils/random.util");
-const { updateBalance, addExternalWallet } = require("./walletService");
+const { updateBalance, addExternalWallet, hasSufficientBalance, getExternalWallet, getBalance } = require("./walletService");
 
 
 //supported network for each cryptocurrency
@@ -300,91 +300,93 @@ const checkWithdrawalStatus = async (reference) => {
 };
 
 // Test crypto transfer operations
-const testCryptoTransferOperations = async () => {
-    try {
-        console.log('🔄 Testing Crypto Transfer Service...\n');
+// const testCryptoTransferOperations = async () => {
+//     try {
+//         console.log('🔄 Testing Crypto Transfer Service...\n');
 
-        // Test user ID (use a real ObjectId in production)
-        const testUserId = '64f7b1234567890123456789';
+//         // Test user ID (use a real ObjectId in production)
+//         const testUserId = '64f7b1234567890123456789';
 
-        // Test 1: Validate wallet addresses
-        console.log('1. Testing wallet address validation...');
-        const addresses = {
-            BTC: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
-            ETH: '0x742c4638A48F29709095B0D4e27ff9dfBe85BAF0',
-            USDT: '0x742c4638A48F29709095B0D4e27ff9dfBe85BAF0'
-        };
+//         // Test 1: Validate wallet addresses
+//         console.log('1. Testing wallet address validation...');
+//         const addresses = {
+//             BTC: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+//             ETH: '0x742c4638A48F29709095B0D4e27ff9dfBe85BAF0',
+//             USDT: '0x742c4638A48F29709095B0D4e27ff9dfBe85BAF0'
+//         };
 
-        for (const [currency, address] of Object.entries(addresses)) {
-            const isValid = validateWalletAddress(currency, address);
-            console.log(`✅ ${currency} address validation: ${isValid ? 'VALID' : 'INVALID'}`);
-        }
+//         for (const [currency, address] of Object.entries(addresses)) {
+//             const isValid = validateWalletAddress(currency, address);
+//             console.log(`✅ ${currency} address validation: ${isValid ? 'VALID' : 'INVALID'}`);
+//         }
 
-        // Test 2: Add external wallet
-        console.log('\n2. Adding external wallet...');
-        try {
-            const wallet = await addExternalWalletWithValidation(testUserId, {
-                currency: 'BTC',
-                address: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
-                label: 'My BTC Wallet',
-                network: 'Bitcoin'
-            });
-            console.log('✅ External wallet added successfully');
-        } catch (walletError) {
-            console.log('ℹ️ External wallet test:', walletError.message);
-        }
+//         // Test 2: Add external wallet
+//         console.log('\n2. Adding external wallet...');
+//         try {
+//             const wallet = await addExternalWalletWithValidation(testUserId, {
+//                 currency: 'BTC',
+//                 address: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+//                 label: 'My BTC Wallet',
+//                 network: 'Bitcoin'
+//             });
+//             console.log('✅ External wallet added successfully');
+//         } catch (walletError) {
+//             console.log('ℹ️ External wallet test:', walletError.message);
+//         }
 
-        // Test 3: Calculate network fees
-        console.log('\n3. Testing network fee calculation...');
-        const fees = {
-            BTC: calculateNetworkFee('BTC'),
-            ETH: calculateNetworkFee('ETH'),
-            'USDT-TRC20': calculateNetworkFee('USDT', 'TRC20'),
-            'USDT-ERC20': calculateNetworkFee('USDT', 'ERC20')
-        };
+//         // Test 3: Calculate network fees
+//         console.log('\n3. Testing network fee calculation...');
+//         const fees = {
+//             BTC: calculateNetworkFee('BTC'),
+//             ETH: calculateNetworkFee('ETH'),
+//             'USDT-TRC20': calculateNetworkFee('USDT', 'TRC20'),
+//             'USDT-ERC20': calculateNetworkFee('USDT', 'ERC20')
+//         };
 
-        for (const [currency, fee] of Object.entries(fees)) {
-            console.log(`✅ ${currency} network fee: ${fee}`);
-        }
+//         for (const [currency, fee] of Object.entries(fees)) {
+//             console.log(`✅ ${currency} network fee: ${fee}`);
+//         }
 
-        // Test 4: Get external wallets
-        console.log('\n4. Getting external wallets...');
-        try {
-            const externalWallets = await getExternalWallets(testUserId);
-            console.log(`✅ Found ${externalWallets.length} external wallets`);
-        } catch (error) {
-            console.log('ℹ️ External wallets test:', error.message);
-        }
+//         // Test 4: Get external wallets
+//         console.log('\n4. Getting external wallets...');
+//         try {
+//             const externalWallets = await getExternalWallet(testUserId);
+//             console.log(`✅ Found ${externalWallets.length} external wallets`);
+//         } catch (error) {
+//             console.log('ℹ️ External wallets test:', error.message);
+//         }
 
-        // Test 5: Process test withdrawal (small amount)
-        console.log('\n5. Testing crypto withdrawal...');
-        try {
-            const withdrawal = await processCryptoWithdrawal(
-                testUserId,
-                0.0001,
-                'BTC',
-                '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'
-            );
-            console.log('✅ Withdrawal processed successfully:');
-            console.log(`   Amount: ${withdrawal.amount} ${withdrawal.currency}`);
-            console.log(`   Address: ${withdrawal.walletAddress}`);
-            console.log(`   TX Hash: ${withdrawal.txHash}`);
-            console.log(`   Reference: ${withdrawal.reference}`);
-        } catch (withdrawalError) {
-            console.log('ℹ️ Withdrawal test skipped:', withdrawalError.message);
-        }
+//         // Test 5: Process test withdrawal (small amount)
+//         console.log('\n5. Testing crypto withdrawal...');
+//         try {
+//             const withdrawal = await processCryptoWithdrawal(
+//                 testUserId,
+//                 0.0001,
+//                 'BTC',
+//                 '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'
+//             );
+//             console.log('✅ Withdrawal processed successfully:');
+//             console.log(`   Amount: ${withdrawal.amount} ${withdrawal.currency}`);
+//             console.log(`   Address: ${withdrawal.walletAddress}`);
+//             console.log(`   TX Hash: ${withdrawal.txHash}`);
+//             console.log(`   Reference: ${withdrawal.reference}`);
+//         } catch (withdrawalError) {
+//             console.log('ℹ️ Withdrawal test skipped:', withdrawalError.message);
+//         }
 
-        // Test 6: Get withdrawal history
-        console.log('\n6. Getting withdrawal history...');
-        const history = await getWithdrawalHistory(testUserId, null, 5);
-        console.log(`✅ Found ${history.withdrawals.length} withdrawals in history`);
+//         // Test 6: Get withdrawal history
+//         console.log('\n6. Getting withdrawal history...');
+//         const history = await getWithdrawalHistory(testUserId, null, 5);
+//         console.log(`✅ Found ${history.withdrawals.length} withdrawals in history`);
 
-        console.log('\n✅ All crypto transfer tests completed successfully!');
+//         console.log('\n✅ All crypto transfer tests completed successfully!');
 
-    } catch (error) {
-        console.error('❌ Crypto transfer test failed:', error.message);
-    }
-};
+//     } catch (error) {
+//         console.error('❌ Crypto transfer test failed:', error.message);
+//     }
+// };
+
+// testCryptoTransferOperations();
 
 module.exports = {
     validateWalletAddress,
@@ -393,7 +395,7 @@ module.exports = {
     calculateNetworkFee,
     getWithdrawalHistory,
     checkWithdrawalStatus,
-    testCryptoTransferOperations,
+    // testCryptoTransferOperations,
     supportedNetworks
 };
 
