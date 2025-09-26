@@ -1,40 +1,29 @@
-// .env file additions (add these to your existing .env file)
-/*
-# Fincra API Configuration
-FINCRA_API_KEY=your_fincra_api_key_here
-FINCRA_BASE_URL=https://api.fincra.com
-FINCRA_WEBHOOK_SECRET=your_webhook_secret_here
-
-# AWS S3 Configuration for document storage (if using S3)
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AWS_REGION=us-east-1
-AWS_S3_BUCKET=your-swiftpay-documents-bucket
-*/
-
-// utils/documentUpload.util.js
 const AWS = require('aws-sdk');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
+const fs = require('fs');
 const path = require('path');
 
-// Configure AWS
-AWS.config.update({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION
-});
+// Configure AWS only if credentials exist
+let s3 = null;
+let isS3Configured = false;
 
-const s3 = new AWS.S3();
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_S3_BUCKET) {
+    AWS.config.update({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION || 'us-east-1'
+    });
+    s3 = new AWS.S3();
+    isS3Configured = true;
+}
 
 // Allowed file types for KYC documents
 const allowedFileTypes = /jpeg|jpg|png|pdf/;
 
 // File filter function
 const fileFilter = (req, file, cb) => {
-    // Check file extension
     const extname = allowedFileTypes.test(path.extname(file.originalname).toLowerCase());
-    // Check mime type
     const mimetype = allowedFileTypes.test(file.mimetype);
 
     if (mimetype && extname) {
@@ -44,8 +33,8 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// Configure multer for S3 upload
-const uploadToS3 = multer({
+// Configure multer for S3 upload (only if S3 is configured)
+const uploadToS3 = isS3Configured ? multer({
     storage: multerS3({
         s3: s3,
         bucket: process.env.AWS_S3_BUCKET,
@@ -61,13 +50,17 @@ const uploadToS3 = multer({
         fileSize: 10 * 1024 * 1024 // 10MB limit
     },
     fileFilter: fileFilter
-});
+}) : null;
 
-// Alternative: Local file upload (if not using S3)
+// Local file upload configuration
 const localStorage = multer({
     storage: multer.diskStorage({
         destination: function (req, file, cb) {
             const uploadPath = path.join(__dirname, '../uploads/usd-kyc');
+            // Create directory if it doesn't exist
+            if (!fs.existsSync(uploadPath)) {
+                fs.mkdirSync(uploadPath, { recursive: true });
+            }
             cb(null, uploadPath);
         },
         filename: function (req, file, cb) {
@@ -83,28 +76,30 @@ const localStorage = multer({
     fileFilter: fileFilter
 });
 
-// Document upload middleware
-const uploadUsdKycDocuments = uploadToS3.fields([
+// Smart upload middleware - uses S3 if configured, otherwise local
+const uploadUsdKycDocuments = isS3Configured ? uploadToS3.fields([
     { name: 'utilityBill', maxCount: 1 },
     { name: 'bankStatement', maxCount: 1 },
-    { name: 'meansOfId', maxCount: 2 } // Can be 1 or 2 files (front/back for driver license)
+    { name: 'meansOfId', maxCount: 2 }
+]) : localStorage.fields([
+    { name: 'utilityBill', maxCount: 1 },
+    { name: 'bankStatement', maxCount: 1 },
+    { name: 'meansOfId', maxCount: 2 }
 ]);
 
-// Alternative for local storage
+// Force local storage (for development)
 const uploadUsdKycDocumentsLocal = localStorage.fields([
     { name: 'utilityBill', maxCount: 1 },
     { name: 'bankStatement', maxCount: 1 },
     { name: 'meansOfId', maxCount: 2 }
 ]);
 
-// Utility function to generate secure document URLs
+// Generate document URLs
 const generateDocumentUrl = (fileName) => {
-    if (process.env.NODE_ENV === 'production') {
-        // For S3
-        return `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+    if (isS3Configured && process.env.NODE_ENV === 'production') {
+        return `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${fileName}`;
     } else {
-        // For local development
-        return `${process.env.BASE_URL || 'http://localhost:3000'}/uploads/usd-kyc/${fileName}`;
+        return `${process.env.BASE_URL || 'http://localhost:3000'}/uploads/usd-kyc/${path.basename(fileName)}`;
     }
 };
 
@@ -112,7 +107,6 @@ const generateDocumentUrl = (fileName) => {
 const validateFincraDocuments = (files) => {
     const errors = [];
 
-    // Check required documents
     if (!files.utilityBill || files.utilityBill.length === 0) {
         errors.push('Utility bill is required');
     }
@@ -125,7 +119,6 @@ const validateFincraDocuments = (files) => {
         errors.push('Means of ID is required');
     }
 
-    // Validate file sizes and types
     const maxSize = 10 * 1024 * 1024; // 10MB
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
 
@@ -143,7 +136,7 @@ const validateFincraDocuments = (files) => {
     return errors;
 };
 
-// Helper function to process uploaded documents for Fincra API
+// Process uploaded documents for Fincra API
 const processDocumentsForFincra = (files) => {
     const documentUrls = {};
 
@@ -157,10 +150,8 @@ const processDocumentsForFincra = (files) => {
 
     if (files.meansOfId) {
         if (files.meansOfId.length === 1) {
-            // Single document (passport)
             documentUrls.meansOfId = files.meansOfId[0].location || generateDocumentUrl(files.meansOfId[0].filename);
         } else {
-            // Multiple documents (driver license front/back)
             documentUrls.meansOfId = files.meansOfId.map(file => 
                 file.location || generateDocumentUrl(file.filename)
             );
@@ -175,5 +166,6 @@ module.exports = {
     uploadUsdKycDocumentsLocal,
     validateFincraDocuments,
     processDocumentsForFincra,
-    generateDocumentUrl
+    generateDocumentUrl,
+    isS3Configured: () => isS3Configured
 };
