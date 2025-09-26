@@ -4,6 +4,7 @@ const DBconnection = require("./config/dbconn");
 const morgan = require("morgan");
 const session = require("express-session");
 const passport = require("passport");
+const path = require("path");
 
 
 const app = express();
@@ -24,10 +25,10 @@ app.use(
     // cookie: { secure: false, httpOnly: true, maxAge: 1000 * 60 * 60 },
   })
 );
-// kkkkkkk
 
 /////////////////////////webhook route///////////////////////////////
 app.use("/korapay-webhook", express.json(), require("./routes/walletRoute/webhook"));
+app.use("/fincra-webhook", express.json(), require("./routes/walletRoute/fincraWebhook"));
 
 
 ///google route implementation///////////////
@@ -44,5 +45,8 @@ app.use("/admin", require("./routes/AdminRoute/admin"));
 // /////////////wallet auth route///////////////
 app.use("/wallet", require("./routes/walletRoute/wallet"));
 app.use("/transaction", require("./routes/walletRoute/Transaction"));
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploadDocuments')));
 
 app.listen(port, () => console.log(`swiftPay app listening on port ${port}!`));

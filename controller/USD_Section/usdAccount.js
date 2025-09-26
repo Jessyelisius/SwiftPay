@@ -123,7 +123,7 @@ const CreateUsdVirtualAccount = async(req, res) => {
         // Make request to Fincra API
         const fincraResponse = await axios.post('https://api.fincra.com/profile/virtual-accounts/requests', fincraData, {
             headers: {
-                'api-key': process.env.FINCRA_API_KEY,
+                'api-key': process.env.fincra_api_key,
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
@@ -144,7 +144,7 @@ const CreateUsdVirtualAccount = async(req, res) => {
         }
 
         // Save USD virtual account details to database
-        const usdVirtualAccount = new UsdVirtualAccount({
+        const usdVirtualAccount = new usdVirtualAccount({
             userId: user._id,
             fincraAccountId: fincraResult.data._id,
             currency: 'USD',
@@ -303,105 +303,8 @@ const getUsdVirtualAccountDetails = async (req, res) => {
     }
 };
 
-// Webhook handler for Fincra notifications
-const handleFincraUsdWebhook = async (req, res) => {
-    try {
-        const webhookData = req.body;
-        console.log('Fincra USD Webhook received:', JSON.stringify(webhookData, null, 2));
-
-        // Verify webhook signature if needed
-        // const signature = req.headers['x-fincra-signature'];
-        // if (!verifyFincraSignature(webhookData, signature)) {
-        //     return res.status(400).json({ error: 'Invalid signature' });
-        // }
-
-        const { event, data } = webhookData;
-
-        // Find the corresponding virtual account
-        const usdVirtualAccount = await UsdVirtualAccount.findOne({ 
-            fincraAccountId: data.id 
-        });
-
-        if (!usdVirtualAccount) {
-            console.error('USD Virtual account not found for webhook:', data.id);
-            return res.status(404).json({ error: 'Virtual account not found' });
-        }
-
-        switch (event) {
-            case 'virtualaccount.approved':
-                await UsdVirtualAccount.findOneAndUpdate(
-                    { fincraAccountId: data.id },
-                    {
-                        $set: {
-                            status: 'approved',
-                            updatedAt: new Date()
-                        }
-                    }
-                );
-                console.log('USD Virtual account approved:', data.id);
-                break;
-
-            case 'virtualaccount.issued':
-                await UsdVirtualAccount.findOneAndUpdate(
-                    { fincraAccountId: data.id },
-                    {
-                        $set: {
-                            status: 'issued',
-                            isActive: true,
-                            accountNumber: data.accountInformation.accountNumber,
-                            bankName: data.accountInformation.bankName,
-                            bankCode: data.accountInformation.bankCode,
-                            accountReference: data.accountInformation.reference,
-                            updatedAt: new Date()
-                        }
-                    }
-                );
-                console.log('USD Virtual account issued:', data.id);
-                break;
-
-            case 'virtualaccount.declined':
-                await UsdVirtualAccount.findOneAndUpdate(
-                    { fincraAccountId: data.id },
-                    {
-                        $set: {
-                            status: 'declined',
-                            declineReason: data.reason,
-                            updatedAt: new Date()
-                        }
-                    }
-                );
-                console.log('USD Virtual account declined:', data.id, 'Reason:', data.reason);
-                break;
-
-            case 'virtualaccount.closed':
-                await UsdVirtualAccount.findOneAndUpdate(
-                    { fincraAccountId: data.id },
-                    {
-                        $set: {
-                            status: 'closed',
-                            isActive: false,
-                            closureReason: data.reason,
-                            updatedAt: new Date()
-                        }
-                    }
-                );
-                console.log('USD Virtual account closed:', data.id, 'Reason:', data.reason);
-                break;
-
-            default:
-                console.log('Unknown webhook event:', event);
-        }
-
-        res.status(200).json({ received: true });
-
-    } catch (error) {
-        console.error('Error handling Fincra USD webhook:', error);
-        res.status(500).json({ error: 'Webhook processing failed' });
-    }
-};
 
 module.exports = {
     CreateUsdVirtualAccount,
     getUsdVirtualAccountDetails,
-    handleFincraUsdWebhook
 };
