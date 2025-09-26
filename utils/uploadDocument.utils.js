@@ -8,15 +8,15 @@ const path = require('path');
 let s3 = null;
 let isS3Configured = false;
 
-if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_S3_BUCKET) {
-    AWS.config.update({
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        region: process.env.AWS_REGION || 'us-east-1'
-    });
-    s3 = new AWS.S3();
-    isS3Configured = true;
-}
+// if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_S3_BUCKET) {
+//     AWS.config.update({
+//         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+//         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+//         region: process.env.AWS_REGION || 'us-east-1'
+//     });
+//     s3 = new AWS.S3();
+//     isS3Configured = true;
+// }
 
 // Allowed file types for KYC documents
 const allowedFileTypes = /jpeg|jpg|png|pdf/;
