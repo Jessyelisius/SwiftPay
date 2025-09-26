@@ -47,6 +47,6 @@ app.use("/wallet", require("./routes/walletRoute/wallet"));
 app.use("/transaction", require("./routes/walletRoute/Transaction"));
 
 // Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploadDocuments')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.listen(port, () => console.log(`swiftPay app listening on port ${port}!`));

@@ -4,6 +4,7 @@ const { decryptKYCData } = require("../../utils/random.util");
 const usdAccountModel = require("../../model/usdAccount.Model");
 const axios = require("axios");
 const walletModel = require("../../model/walletModel");
+const { validateFincraDocuments, processDocumentsForFincra } = require("../../utils/uploadDocument.utils");
 
 
 const CreateUsdVirtualAccount = async(req, res) => {
@@ -12,7 +13,7 @@ const CreateUsdVirtualAccount = async(req, res) => {
 
     try {
         const user  = req.user; // Assuming user is attached to req object via middleware
-        const {utilityBill, bankStatement, meansOfId} = req.body;
+        // const {utilityBill, bankStatement, meansOfId} = req.body;
 
         // Validation checks
         if (!user?.isKycVerified) {
@@ -25,13 +26,26 @@ const CreateUsdVirtualAccount = async(req, res) => {
         }
 
         // Validate required documents
-        if (!utilityBill || !bankStatement || !meansOfId) {
+        // if (!utilityBill || !bankStatement || !meansOfId) {
+        //     await session.abortTransaction();
+        //     return res.status(400).json({ 
+        //         Error: true, 
+        //         Message: "All documents required: utilityBill, bankStatement, and meansOfId" 
+        //     });
+        // }
+        // Validate uploaded documents
+        const validationErrors = validateFincraDocuments(req.files);
+        if (validationErrors.length > 0) {
             await session.abortTransaction();
-            return res.status(400).json({ 
-                Error: true, 
-                Message: "All documents required: utilityBill, bankStatement, and meansOfId" 
+            return res.status(400).json({
+                Error: true,
+                Message: 'Document validation failed',
+                Errors: validationErrors
             });
         }
+
+        // Get document URLs
+        const { utilityBill, bankStatement, meansOfId } = processDocumentsForFincra(req.files);
 
          const kycData = await kycModel.findOne({ userid: user._id }).session(session);
         
