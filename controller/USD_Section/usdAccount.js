@@ -135,8 +135,8 @@ const CreateUsdVirtualAccount = async(req, res) => {
         console.log('Fincra USD Request Data:', JSON.stringify(fincraData, null, 2));
 
         // Make request to Fincra API
-        // const fincraResponse = await axios.post('https://api.fincra.com/profile/virtual-accounts/requests', fincraData, {
-        const fincraResponse = await axios.post('https://sandboxapi.fincra.com/profile/virtual-accounts/requests', fincraData, {
+        const fincraResponse = await axios.post('https://api.fincra.com/profile/virtual-accounts/requests', fincraData, {
+        // const fincraResponse = await axios.post('https://sandboxapi.fincra.com/profile/virtual-accounts/requests', fincraData, {
             headers: {
                 'api-key': process.env.fincra_api_key,
                 'Accept': 'application/json',
