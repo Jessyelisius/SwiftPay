@@ -158,7 +158,7 @@ const CreateUsdVirtualAccount = async(req, res) => {
         }
 
         // Save USD virtual account details to database
-        const usdVirtualAccount = new usdVirtualAccount({
+        const usdVirtualAccount = new usdAccountModel({
             userId: user._id,
             fincraAccountId: fincraResult.data._id,
             currency: 'USD',
@@ -235,7 +235,7 @@ const getUsdVirtualAccountDetails = async (req, res) => {
         }
 
         // Check if user has a USD virtual account
-        const usdVirtualAccount = await UsdVirtualAccount.findOne({ userId: user._id });
+        const usdVirtualAccount = await usdAccountModel.findOne({ userId: user._id });
         if (!usdVirtualAccount) {
             return res.status(404).json({ Error: true, Message: "USD virtual account not found" });
         }
@@ -243,7 +243,7 @@ const getUsdVirtualAccountDetails = async (req, res) => {
         // Fetch virtual account details from Fincra
         const fincraResponse = await axios.get(`https://api.fincra.com/profile/virtual-accounts/${usdVirtualAccount.fincraAccountId}`, {
             headers: {
-                'api-key': process.env.FINCRA_API_KEY,
+                'api-key': process.env.fincra_api_key,
                 'Accept': 'application/json'
             }
         });
@@ -263,7 +263,7 @@ const getUsdVirtualAccountDetails = async (req, res) => {
 
         // Update local database with latest info if account is approved and issued
         if (fincraResult.data.status === 'approved' && fincraResult.data.accountInformation) {
-            await UsdVirtualAccount.findOneAndUpdate(
+            await usdAccountModel.findOneAndUpdate(
                 { userId: user._id },
                 {
                     $set: {
