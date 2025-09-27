@@ -21,38 +21,6 @@ function generateEncryptionKey() {
  * @param {string} key - The encryption key (hex string)
  * @returns {string} - Encrypted data with IV and tag (base64)
  */
-// function encryptData(text, key) {
-//     try {
-//         if (!text || !key) {
-//             throw new Error('Text and key are required');
-//         }
-
-//         // Convert hex key to buffer
-//         const keyBuffer = Buffer.from(key, 'hex');
-        
-//         // Generate random IV
-//         const iv = crypto.randomBytes(IV_LENGTH);
-        
-//         // Create cipher
-//         const cipher = crypto.createCipher(ALGORITHM, keyBuffer);
-//         cipher.setAAD(Buffer.from('kyc-data')); // Additional authenticated data
-        
-//         // Encrypt the text
-//         let encrypted = cipher.update(text, 'utf8', 'hex');
-//         encrypted += cipher.final('hex');
-        
-//         // Get the authentication tag
-//         const tag = cipher.getAuthTag();
-        
-//         // Combine IV + tag + encrypted data
-//         const combined = Buffer.concat([iv, tag, Buffer.from(encrypted, 'hex')]);
-        
-//         return combined.toString('base64');
-//     } catch (error) {
-//         console.error('Encryption error:', error);
-//         throw new Error('Failed to encrypt data');
-//     }
-// }
 
 function encryptData(text, key) {
     try {
@@ -60,17 +28,27 @@ function encryptData(text, key) {
             throw new Error('Text and key are required');
         }
 
+        // Convert hex key to buffer
         const keyBuffer = Buffer.from(key, 'hex');
+        
+        // Generate random IV
         const iv = crypto.randomBytes(IV_LENGTH);
         
-        const cipher = crypto.createCipherGCM(ALGORITHM, keyBuffer, iv);
+        // Create cipher
+        // const cipher = crypto.createCipher(ALGORITHM, keyBuffer);
+        const cipher = crypto.createCipheriv(ALGORITHM, keyBuffer, iv);
+        cipher.setAAD(Buffer.from('kyc-data')); // Additional authenticated data
         
+        // Encrypt the text
         let encrypted = cipher.update(text, 'utf8', 'hex');
         encrypted += cipher.final('hex');
         
+        // Get the authentication tag
         const tag = cipher.getAuthTag();
         
+        // Combine IV + tag + encrypted data
         const combined = Buffer.concat([iv, tag, Buffer.from(encrypted, 'hex')]);
+        
         return combined.toString('base64');
     } catch (error) {
         console.error('Encryption error:', error);
@@ -78,45 +56,12 @@ function encryptData(text, key) {
     }
 }
 
-/**
+ /**
  * Decrypt sensitive data
  * @param {string} encryptedData - The encrypted data (base64)
  * @param {string} key - The encryption key (hex string)
  * @returns {string} - Decrypted text
  */
-
-// function decryptData(encryptedData, key) {
-//     try {
-//         if (!encryptedData || !key) {
-//             throw new Error('Encrypted data and key are required');
-//         }
-
-//         // Convert hex key to buffer
-//         const keyBuffer = Buffer.from(key, 'hex');
-        
-//         // Convert base64 to buffer
-//         const combined = Buffer.from(encryptedData, 'base64');
-        
-//         // Extract IV, tag, and encrypted data
-//         const iv = combined.slice(0, IV_LENGTH);
-//         const tag = combined.slice(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
-//         const encrypted = combined.slice(IV_LENGTH + TAG_LENGTH);
-        
-//         // Create decipher
-//         const decipher = crypto.createDecipher(ALGORITHM, keyBuffer);
-//         decipher.setAAD(Buffer.from('kyc-data')); // Same AAD as encryption
-//         decipher.setAuthTag(tag);
-        
-//         // Decrypt the data
-//         let decrypted = decipher.update(encrypted, null, 'utf8');
-//         decrypted += decipher.final('utf8');
-        
-//         return decrypted;
-//     } catch (error) {
-//         console.error('Decryption error:', error);
-//         throw new Error('Failed to decrypt data');
-//     }
-// }
 
 function decryptData(encryptedData, key) {
     try {
@@ -124,16 +69,24 @@ function decryptData(encryptedData, key) {
             throw new Error('Encrypted data and key are required');
         }
 
+        // Convert hex key to buffer
         const keyBuffer = Buffer.from(key, 'hex');
+        
+        // Convert base64 to buffer
         const combined = Buffer.from(encryptedData, 'base64');
         
+        // Extract IV, tag, and encrypted data
         const iv = combined.slice(0, IV_LENGTH);
         const tag = combined.slice(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
         const encrypted = combined.slice(IV_LENGTH + TAG_LENGTH);
         
-        const decipher = crypto.createDecipherGCM(ALGORITHM, keyBuffer, iv);
+        // Create decipher
+        // const decipher = crypto.createDecipher(ALGORITHM, keyBuffer);
+        const decipher = crypto.createDecipheriv(ALGORITHM, keyBuffer, iv);
+        decipher.setAAD(Buffer.from('kyc-data')); // Same AAD as encryption
         decipher.setAuthTag(tag);
         
+        // Decrypt the data
         let decrypted = decipher.update(encrypted, null, 'utf8');
         decrypted += decipher.final('utf8');
         
@@ -143,6 +96,7 @@ function decryptData(encryptedData, key) {
         throw new Error('Failed to decrypt data');
     }
 }
+
 
 /**
  * Encrypt KYC sensitive fields
@@ -174,6 +128,7 @@ function encryptKYCData(kycData, key) {
  * @param {string} key - Encryption key
  * @returns {Object} - KYC data with decrypted sensitive fields
  */
+
 function decryptKYCData(encryptedKycData, key) {
     try {
         const sensitiveFields = ['idNumber', 'nin', 'bvn', 'phone'];
