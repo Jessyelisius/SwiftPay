@@ -15,6 +15,8 @@ function generateEncryptionKey() {
     return crypto.randomBytes(KEY_LENGTH).toString('hex');
 }
 
+// console.log("encryption key", generateEncryptionKey());
+
 /**
  * Encrypt sensitive data
  * @param {string} text - The text to encrypt
