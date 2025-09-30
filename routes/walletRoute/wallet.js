@@ -14,7 +14,6 @@ router.post('/virtualAccountCreation', verifyUserJwt, CreateVirtualAccount);
 router.get('/getVirtualAccountDetails', verifyUserJwt, getVirtualAccountDetails);
 
 //usd virtual account 
-
 // Use S3 if configured, otherwise local
 const uploadMiddleware = process.env.AWS_S3_BUCKET ? uploadUsdKycDocuments : uploadUsdKycDocumentsLocal;
 

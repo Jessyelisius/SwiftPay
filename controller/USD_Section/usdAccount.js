@@ -143,7 +143,7 @@ const CreateUsdVirtualAccount = async(req, res) => {
             //     'Content-Type': 'application/json'
             // }
              headers: {
-                Authorization: `Bearer ${process.env.fincra_api_key}`,
+                Authorization: process.env.fincra_api_key,
                 Accept: "application/json",
                 "Content-Type": "application/json"
             }
@@ -254,7 +254,7 @@ const getUsdVirtualAccountDetails = async (req, res) => {
             //     'Accept': 'application/json'
             // }
             headers: {
-                Authorization: `Bearer ${process.env.fincra_api_key}`,
+                Authorization: process.env.fincra_api_key,
                 Accept: "application/json"
             }
         });

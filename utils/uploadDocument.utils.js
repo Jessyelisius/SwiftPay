@@ -64,7 +64,7 @@ const localStorage = multer({
             cb(null, uploadPath);
         },
         filename: function (req, file, cb) {
-            const userId = req.user._id;
+            const userId = req.user._id || "anonymous";
             const timestamp = Date.now();
             const fileName = `${userId}-${timestamp}-${file.originalname}`;
             cb(null, fileName);
