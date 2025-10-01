@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const { generateLink, Sendmail } = require("../../utils/mailer.util");
 const walletModel = require("../../model/walletModel");
 
+//route to register user
 const Registration = async (req, res) => {
   // Email regex pattern for basic email validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -185,7 +186,6 @@ const Registration = async (req, res) => {
 };
 
 //route to verify email
-
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;
@@ -197,11 +197,6 @@ const verifyEmail = async (req, res) => {
 
     if (!user)
       return res.status(400).json({ Error: true, Message: "user not found" });
-
-    // if (user.EmailVerif)
-    //   return res
-    //     .status(200)
-    //     .json({ Error: false, Message: "Email already verified" });
 
     (user.EmailVerif = true), (user.EmailToken = null); // set to null remove the token after verification
     await user.save();

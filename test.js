@@ -79,3 +79,35 @@
 
 // // 5. RUN THE TEST
 // runWebhookTest();
+
+require("dotenv").config();
+const axios = require("axios");
+
+async function createUSDVA() {
+  try {
+    const response = await axios.post(
+      "https://sandboxapi.fincra.com/profile/virtual-accounts/requests",
+      {
+        customer: {
+          name: "John Doe",
+          email: "john@example.com"
+        },
+        currency: "USD",
+        bankCode: "044", // Example for NGN (not needed for USD sometimes)
+        channel: "virtual-account"
+      },
+      {
+        headers: {
+          "api-key": process.env.fincra_api_key,
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    console.log("✅ Success:", response.data);
+  } catch (err) {
+    console.error("❌ Error:", err.response?.status, err.response?.data);
+  }
+}
+
+createUSDVA();

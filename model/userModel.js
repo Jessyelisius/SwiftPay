@@ -50,6 +50,21 @@ const UserModel = new mongoose.Schema(
     KycDetails: { 
       type: Object 
     },
+    googleId: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    appleId: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    authProvider: {
+        type: String,
+        enum: ['local', 'google', 'apple'],
+        default: 'local'
+    }
   },
   { timestamps: true }
 );

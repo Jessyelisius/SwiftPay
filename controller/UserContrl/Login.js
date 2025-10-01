@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const ErrorDisplay = require("../../utils/random.util");
 const { createJWT } = require("../../middleware/jwtAuth");
 
+//route to login user
 const Login = async (req, res) => {
   try {
     const { Email, Password } = req.body;
@@ -25,15 +26,6 @@ const Login = async (req, res) => {
 
     //jwt from auth 
     const token = await createJWT(user, 'User');
-
-    // //jwt
-    // const token = jwt.sign(
-    //   {
-    //     userId: user._id,
-    //   },
-    //   process.env.jwt_secret_token,
-    //   { expiresIn: "1hr" }
-    // );
 
     res.status(200).json({
       Error: false,

@@ -3,7 +3,7 @@ require("dotenv").config();
 const DBconnection = require("./config/dbconn");
 const morgan = require("morgan");
 const session = require("express-session");
-const passport = require("passport");
+const passport = require("./config/passport");
 const path = require("path");
 
 
@@ -37,7 +37,7 @@ app.use(passport.session());
 
 /////////////user auth route////////////////
 app.use("/auth", require("./routes/userRoute/user"));
-app.use("/auth", require("./routes/GoogleAuth/googleAuthRoute"));
+app.use("/auths", require("./routes/GoogleAuth/googleAuth"));
 
 /////////////////admin routes///////////////////
 app.use("/admin", require("./routes/AdminRoute/admin"));
