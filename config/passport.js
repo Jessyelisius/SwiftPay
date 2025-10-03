@@ -35,7 +35,11 @@ passport.use(new GoogleStrategy({
             FirstName: profile.name.givenName,
             LastName: profile.name.familyName,
             profilePhoto: profile.photos[0]?.value,
-            isEmailVerified: true,
+            EmailVerif: true,
+            EmailToken: null,
+            // isprofileVerified: false,
+            Phone: null, // Add this
+            Password: null, // Add this
             authProvider: 'google',
             createdAt: new Date()
         });
