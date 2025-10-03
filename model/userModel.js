@@ -21,12 +21,14 @@ const UserModel = new mongoose.Schema(
     },
     Password: {
       type: String,
-      required: true,
+      // required: true,
+      required: function() {
+        return this.authProvider === 'local'; // Only required for local auth
+      },
       minlength: 6,
     },
     Phone: {
       type: String,
-      required: true,
     },
     EmailVerif: {
       type: Boolean,
