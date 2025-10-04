@@ -16,6 +16,14 @@ const Login = async (req, res) => {
     if (!user)
       return res.status(400).json({ Error: true, Message: "user not found" });
 
+    // Check if user signed up with OAuth
+      if (user.authProvider !== 'local' && !user.Password) {
+          return res.status(400).json({ 
+              Error: true, 
+              Message: `This account was created using ${user.authProvider}. Please sign in with ${user.authProvider}.` 
+          });
+      }
+
     const validPwd = bcrypt.compareSync(Password, user.Password);
     if (!validPwd)
       return res

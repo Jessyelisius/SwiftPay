@@ -38,8 +38,8 @@ passport.use(new GoogleStrategy({
             EmailVerif: true,
             EmailToken: null,
             // isprofileVerified: false,
-            Phone: null, // Add this
-            Password: null, // Add this
+            Phone: null,
+            Password: null,
             authProvider: 'google',
             createdAt: new Date()
         });
