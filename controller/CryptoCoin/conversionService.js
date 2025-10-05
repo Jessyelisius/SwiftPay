@@ -374,5 +374,5 @@ module.exports = {
     savePriceHistory,
     getRateWithFallback,
     getConversionQuote,
-    testConversionOperations
+    // testConversionOperations
 };

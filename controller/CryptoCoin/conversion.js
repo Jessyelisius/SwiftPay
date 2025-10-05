@@ -145,6 +145,9 @@ const getRate = async(from, to) => await convertCurrency(1, from, to);
 
 module.exports = {
     convertCurrency,
+    fetchCryptoPrices,
+    convertNgnToUsd,
+    convertUsdToNgn,
     getRate,
     fetchUsdToNgnRate,
     getPrices,
