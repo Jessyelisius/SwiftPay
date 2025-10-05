@@ -3,16 +3,34 @@ const {validationToken, verifyUserJwt} = require('../../middleware/jwtAuth');
 const { DepositWithCard, submitCardPIN, submitCardOTP, DepositWithVisualAccount } = require('../../controller/WalletPaymentContrl/Deposits');
 const Transfer = require('../../controller/WalletPaymentContrl/Transfer');
 const { getTransactionHistory, getSingleTransaction, getUserTransactionSummary } = require('../../controller/WalletPaymentContrl/transactionContr');
-const { fetchUsdToNgnRate, fetchCryptoPrices, getRate } = require('../../controller/CryptoCoin/conversion');
-const { getConversionQuote, processConversion, getConversionHistory, savePriceHistory } = require('../../controller/CryptoCoin/conversionService');
-const { getWallet, getBalance, addExternalWallet, getExternalWallet, createWallet } = require('../../controller/CryptoCoin/walletService');
-const { validateWalletAddress, processCryptoWithdrawal, getWithdrawalHistory, checkWithdrawalStatus, calculateNetworkFee, supportedNetworks } = require('../../controller/CryptoCoin/cryptoTransferService');
+// const { fetchUsdToNgnRate, fetchCryptoPrices, getRate } = require('../../controller/CryptoCoin/conversion');
+// const { getConversionQuote, processConversion, getConversionHistory, savePriceHistory } = require('../../controller/CryptoCoin/conversionService');
+// const { getWallet, getBalance, addExternalWallet, getExternalWallet, createWallet } = require('../../controller/CryptoCoin/walletService');
+// const { validateWalletAddress, processCryptoWithdrawal, getWithdrawalHistory, checkWithdrawalStatus, calculateNetworkFee, supportedNetworks } = require('../../controller/CryptoCoin/cryptoTransferService');
+// Import crypto controllers
+const {
+    fetchUsdToNgnRate,
+    getPrices,
+    getConversionQuote,
+    processConversion,
+    getConversionHistory,
+    createWallet,
+    getWallet,
+    getBalance,
+    addExternalWallet,
+    getExternalWallet,
+    validateWalletAddress,
+    processCryptoWithdrawal,
+    getWithdrawalHistory,
+    checkWithdrawalStatus,
+    supportedNetworks,
+    calculateNetworkFee,
+    savePriceHistory,
+    getRate
+} = require('../../controller/CryptoCoin/cryptoController');
+
 
 const router = express.Router();
-
-router.get('/deposit', async(req, res) =>{
-
-})
 
 // Deposit routes
 router.post('/deposit', verifyUserJwt, DepositWithCard);
@@ -32,7 +50,7 @@ router.get('/summary', verifyUserJwt, getUserTransactionSummary);
 
 // Cryptocurrency section
 router.get('/ngnRate', verifyUserJwt, fetchUsdToNgnRate);
-router.get('/cryptoPrices', verifyUserJwt, fetchCryptoPrices);
+router.get('/cryptoPrices', verifyUserJwt, getPrices);
 router.get('/quote', verifyUserJwt, getConversionQuote);
 router.post('/convert', verifyUserJwt, processConversion);
 router.get('/conversion-history', verifyUserJwt, getConversionHistory);
