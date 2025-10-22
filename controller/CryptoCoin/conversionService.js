@@ -151,7 +151,7 @@ const processConversion = async(userId, fromCurrency, toCurrency, amount) => {
             };
         } catch (balanceError) {
             // Rollback transaction on balance update failure
-            console.log('error processing', error);
+            console.log('error processing', balanceError );
             transaction.status = 'failed';
             await transaction.save();
             throw balanceError;
