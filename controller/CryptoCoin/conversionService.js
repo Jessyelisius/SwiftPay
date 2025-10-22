@@ -1,6 +1,7 @@
 const conversion = require("../../model/conversion");
 const priceHistoryModel = require("../../model/priceHistory.model");
 const transactionModel = require("../../model/transactionModel");
+const userModel = require("../../model/userModel");
 const { calculateTransactionFee } = require("../../utils/random.util");
 const { getRate, convertCurrency, getPrices } = require("./conversion");
 const { hasSufficientBalance, getBalance, updateBalance } = require("./walletService");
