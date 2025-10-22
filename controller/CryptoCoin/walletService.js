@@ -12,7 +12,7 @@ const createWallet = async(userId) => {
             throw new Error("Unauthorized || User not found");
         }
 
-        if(!user?.isKYCVerified) {
+        if(!user?.isKycVerified) {
            throw new Error("Forbidden || KYC not verified");
         }
 
