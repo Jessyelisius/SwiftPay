@@ -177,7 +177,7 @@ const saveConversionHistory = async(conversionData) => {
             conversionFee = 0
         } = conversionData;
 
-        const conversion = new conversion({
+        const conversionRecord = new conversion({
             userId,
             fromCurrency,
             toCurrency,
@@ -190,8 +190,8 @@ const saveConversionHistory = async(conversionData) => {
                 conversionFee: conversionFee
             }
         });
-        await conversion.save();
-        return conversion;
+        await conversionRecord.save();
+        return conversionRecord;
 
     } catch (error) {
         console.error('Error saving conversion history:', error.message);
