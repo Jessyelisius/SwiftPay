@@ -1,3 +1,4 @@
+const userModel = require("../../model/userModel");
 const walletModel = require("../../model/walletModel");
 const { ErrorDisplay } = require("../../utils/random.util");
 
@@ -6,16 +7,16 @@ const createWallet = async(userId) => {
     try {
 
         //  const userid = userId;
-
-        if(!userId) {
-            throw new Error("Unauthorized || userId not found");
+        const user = await userModel.findById(userId);
+        if(!user) {
+            throw new Error("Unauthorized || User not found");
         }
 
-        if(!userId?.isKYCVerified) {
+        if(!user?.isKYCVerified) {
            throw new Error("Forbidden || KYC not verified");
         }
 
-        if(!userId?.EmailVerif) {
+        if(!user?.EmailVerif) {
            throw new Error("Forbidden || Email not verified");
         }
 
