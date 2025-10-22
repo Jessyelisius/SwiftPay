@@ -124,7 +124,7 @@ const processConversion = async(userId, fromCurrency, toCurrency, amount) => {
                 toCurrency,
                 fromAmount: amount,
                 toAmount: convertedAmount,
-                conversionFee,
+                conversionRate,
                 transactionId: transaction._id,
                 conversionFee
             });
