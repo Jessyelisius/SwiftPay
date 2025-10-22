@@ -26,6 +26,11 @@ app.use(
   })
 );
 
+//express-filupload
+const fileUpload = require("express-fileupload");
+app.use(fileUpload({ useTempFiles: true }));
+
+
 /////////////////////////webhook route///////////////////////////////
 app.use("/korapay-webhook", express.json(), require("./routes/walletRoute/webhook"));
 app.use("/fincra-webhook", express.json(), require("./routes/walletRoute/fincraWebhook"));

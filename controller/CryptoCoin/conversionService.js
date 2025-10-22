@@ -14,16 +14,18 @@ const processConversion = async(userId, fromCurrency, toCurrency, amount) => {
         if(!userId || !fromCurrency || !toCurrency || !amount){
             throw new Error("All fields are required: userId, amount, fromCurrency, toCurrency");
         }
-        if(!userId) {
-            throw new Error("Unauthorized || userId not found");
+        // Fetch the user object from database
+        const user = await userModel.findById(userId);
+
+        if(!user) {
+            throw new Error("Unauthorized || User not found");
+        }
+        if(!user.isKycVerified) {
+        throw new Error("Forbidden || KYC not verified");
         }
 
-        if(!userId?.isKYCVerified) {
-           throw new Error("Forbidden || KYC not verified");
-        }
-
-        if(!userId?.EmailVerif) {
-           throw new Error("Forbidden || Email not verified");
+        if(!user.EmailVerif) {
+        throw new Error("Forbidden || Email not verified");
         }
 
         if(amount <= 0){
@@ -326,46 +328,6 @@ const getConversionQuote = async (amount, fromCurrency, toCurrency) => {
     }
 };
 
-// const testConversionOperations = async () => {
-//     try {
-//         console.log('🔄 Testing Conversion Service...\n');
-
-//         // Test user ID (use a real ObjectId in production)
-//         const testUserId = '64f7b1234567890123456789';
-
-//         // Test 1: Get conversion quote
-//         console.log('1. Getting conversion quote...');
-//         const quote = await getConversionQuote(1000, 'NGN', 'BTC');
-//         console.log(`✅ Quote: ${quote.fromAmount} ${quote.fromCurrency} = ${quote.toAmount.toFixed(8)} ${quote.toCurrency}`);
-//         console.log(`   Rate: 1 ${quote.fromCurrency} = ${quote.rate.toFixed(8)} ${quote.toCurrency}`);
-
-//         // Test 2: Save price history
-//         console.log('\n2. Saving price history...');
-//         const priceRecords = await savePriceHistory();
-//         console.log(`✅ Saved ${priceRecords.length} price records`);
-
-//         // Test 3: Process conversion (small amount)
-//         console.log('\n3. Processing test conversion...');
-//         try {
-//             const conversion = await processConversion(testUserId, 1000, 'NGN', 'USDT');
-//             console.log('✅ Conversion successful:');
-//             console.log(`   ${conversion.fromAmount} ${conversion.fromCurrency} → ${conversion.toAmount.toFixed(6)} ${conversion.toCurrency}`);
-//             console.log(`   Reference: ${conversion.reference}`);
-//         } catch (conversionError) {
-//             console.log('ℹ️ Conversion test skipped:', conversionError.message);
-//         }
-
-//         // Test 4: Get conversion history
-//         console.log('\n4. Getting conversion history...');
-//         const history = await getConversionHistory(testUserId, 5);
-//         console.log(`✅ Found ${history.conversions.length} conversions in history`);
-
-//         console.log('\n✅ All conversion tests completed successfully!');
-
-//     } catch (error) {
-//         console.error('❌ Conversion test failed:', error.message);
-//     }
-// };
 
 module.exports = {
     processConversion,
