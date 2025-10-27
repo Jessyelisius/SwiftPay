@@ -266,6 +266,7 @@ const validateWalletAddress = async (req, res) => {
 // processCryptoWithdrawal
 const processCryptoWithdrawal = async (req, res) => {
     try {
+        
         const userId = req.user._id;
         const { amount, currency, walletAddress, network } = req.body;
 
