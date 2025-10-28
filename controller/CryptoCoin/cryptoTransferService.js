@@ -1,5 +1,6 @@
 const transactionModel = require("../../model/transactionModel");
 const { calculateTransactionFee } = require("../../utils/random.util");
+const { v4: uuidv4 } = require('uuid');
 const { updateBalance, addExternalWallet, hasSufficientBalance, getExternalWallet, getBalance } = require("./walletService");
 
 
