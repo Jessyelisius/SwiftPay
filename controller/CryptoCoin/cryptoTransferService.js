@@ -118,7 +118,7 @@ const processCryptoWithdrawal = async (userId, amount, currency, walletAddress, 
         // Treat crypto withdrawal as international transfer for fee calculation
         // const serviceFee = calculateTransactionFee('international_transfer', amount);
         
-        const convertCurrency = require('./conversion');
+        const {convertCurrency} = require('./conversion');
         const amountInNgn = await convertCurrency(amount, currency, 'NGN');
         const serviceFeeInNgn = calculateTransactionFee('crypto_withdrawal', amountInNgn);
 
