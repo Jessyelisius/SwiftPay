@@ -116,15 +116,22 @@ const processCryptoWithdrawal = async (userId, amount, currency, walletAddress, 
         
         // Calculate SwiftPay service fee for crypto withdrawal (using your fee system)
         // Treat crypto withdrawal as international transfer for fee calculation
-        const serviceFee = calculateTransactionFee('international_transfer', amount);
+        // const serviceFee = calculateTransactionFee('international_transfer', amount);
         
-        const totalDeduction = amount + networkFee + serviceFee;
+        const convertCurrency = require('./conversion');
+        const amountInNgn = await convertCurrency(amount, currency, 'NGN');
+        const serviceFeeInNgn = calculateTransactionFee('crypto_withdrawal', amountInNgn);
+
+        // Convert service fee back to crypto for total deduction
+        const serviceFeeInCrypto = await convertCurrency(serviceFeeInNgn, 'NGN', currency);
+
+        const totalDeduction = amount + networkFee + serviceFeeInCrypto;
 
         // Check sufficient balance for amount + all fees
         const hasBalance = await hasSufficientBalance(userId, currency, totalDeduction);
         if (!hasBalance) {
             const currentBalance = await getBalance(userId, currency);
-            throw new Error(`Insufficient ${currency} balance. Available: ${currentBalance}, Required: ${totalDeduction} (Amount: ${amount} + Network Fee: ${networkFee} + Service Fee: ${serviceFee})`);
+            throw new Error(`Insufficient ${currency} balance. Available: ${currentBalance}, Required: ${totalDeduction} (Amount: ${amount} + Network Fee: ${networkFee} + Service Fee: ${serviceFeeInCrypto} ${currency} [₦${serviceFeeInNgn}])`);
         }
 
         // Generate transaction reference
@@ -143,17 +150,24 @@ const processCryptoWithdrawal = async (userId, amount, currency, walletAddress, 
                 walletAddress: walletAddress.trim(),
                 network: network || supportedNetworks[currency][0],
                 gasFee: networkFee,
-                serviceFee: serviceFee,
-                totalFees: networkFee + serviceFee
+                // serviceFee: serviceFee,
+                // totalFees: networkFee + serviceFee
+                serviceFeeInCrypto: serviceFeeInCrypto,
+                serviceFeeInNgn: serviceFeeInNgn,
+                totalFees: networkFee + serviceFeeInCrypto
             },
             recipient: {
                 walletAddress: walletAddress.trim()
             },
             metadata: {
                 networkFee: networkFee,
-                serviceFee: serviceFee,
+                // serviceFee: serviceFee,
+                // totalDeduction: totalDeduction,
+                // feeType: 'international_transfer'
+                serviceFeeInCrypto: serviceFeeInCrypto,
+                serviceFeeInNgn: serviceFeeInNgn,
                 totalDeduction: totalDeduction,
-                feeType: 'international_transfer'
+                feeType: 'crypto_withdrawal'
             }
         });
 
@@ -184,9 +198,12 @@ const processCryptoWithdrawal = async (userId, amount, currency, walletAddress, 
                     currency,
                     walletAddress,
                     network: network || supportedNetworks[currency][0],
-                    networkFee,
-                    serviceFee,
-                    totalFees: networkFee + serviceFee,
+                    // networkFee,
+                    // serviceFee,
+                    // totalFees: networkFee + serviceFee,
+                    networkFee: `${networkFee} ${currency}`,
+                    serviceFee: `${serviceFeeInCrypto} ${currency} (₦${serviceFeeInNgn})`,
+                    totalFees: `${networkFee + serviceFeeInCrypto} ${currency}`,
                     txHash: mockTxHash,
                     reference
                 }
