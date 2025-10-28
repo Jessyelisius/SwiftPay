@@ -237,6 +237,7 @@ const savePriceHistory = async () => {
         for (const [currency, priceData] of Object.entries(prices)) {
             if (priceData.usd && priceData.ngn) {
                 const priceHistory = new priceHistoryModel({
+                    userId,
                     currency,
                     prices: {
                         usd: priceData.usd,
