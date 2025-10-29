@@ -136,7 +136,7 @@ const DepositWithCard = async (req, res) => {
             });
         }
 
-        const { amount, currency, card, saveCard } = req.body;
+        const { amount, currency, card, saveCard, transactionPin } = req.body;
         if (!amount || !card?.number || !card.expiry_month || !card?.expiry_year || !card?.cvv || !currency) {
             return res.status(400).json({ Error: true, Message: "Invalid card details" });
         }

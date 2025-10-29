@@ -7,17 +7,18 @@ const { createWallet, getWallet, getBalance, updateBalance, hasSufficientBalance
 const { validateWalletAddress, addExternalWalletWithValidation, processCryptoWithdrawal, calculateNetworkFee, getWithdrawalHistory, checkWithdrawalStatus, testCryptoTransferOperations } = require('../../controller/CryptoCoin/cryptoTransferService');
 const { CreateUsdVirtualAccount, getUsdVirtualAccountDetails } = require('../../controller/USD_Section/usdAccount');
 const { uploadUsdKycDocuments, uploadUsdKycDocumentsLocal } = require('../../utils/uploadDocument.utils');
+const { pinLimiter, verifyTransactionPin } = require('../../middleware/verifyTransactionPin,');
 const router = express.Router();
 
 // Virtual Account routes
-router.post('/virtualAccountCreation', verifyUserJwt, CreateVirtualAccount);
+router.post('/virtualAccountCreation', verifyUserJwt, pinLimiter, verifyTransactionPin, CreateVirtualAccount);
 router.get('/getVirtualAccountDetails', verifyUserJwt, getVirtualAccountDetails);
 
 //usd virtual account 
 // Use S3 if configured, otherwise local
 const uploadMiddleware = process.env.AWS_S3_BUCKET ? uploadUsdKycDocuments : uploadUsdKycDocumentsLocal;
 
-router.post('/createUsdVirtualAccount', verifyUserJwt, uploadMiddleware, CreateUsdVirtualAccount);
+router.post('/createUsdVirtualAccount', verifyUserJwt, uploadMiddleware, pinLimiter, verifyTransactionPin, CreateUsdVirtualAccount);
 router.get('/getUsdVirtualAccountDetails', verifyUserJwt, getUsdVirtualAccountDetails);
 
 

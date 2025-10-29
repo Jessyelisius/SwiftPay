@@ -84,7 +84,7 @@ const getConversionQuote = async (req, res) => {
 const processConversion = async (req, res) => {
     try {
         const userId = req.user._id;
-        const { amount, fromCurrency, toCurrency } = req.body;
+        const { amount, fromCurrency, toCurrency, transactionPin } = req.body;
 
         if (!amount || !fromCurrency || !toCurrency) {
             return res.status(400).json({
@@ -188,7 +188,7 @@ const getBalance = async (req, res) => {
 const addExternalWallet = async (req, res) => {
     try {
         const userId = req.user._id;
-        const { currency, address, label, network } = req.body;
+        const { currency, address, label, network, transactionPin } = req.body;
 
         if (!currency || !address || !label) {
             return res.status(400).json({
@@ -266,9 +266,9 @@ const validateWalletAddress = async (req, res) => {
 // processCryptoWithdrawal
 const processCryptoWithdrawal = async (req, res) => {
     try {
-        
+
         const userId = req.user._id;
-        const { amount, currency, walletAddress, network } = req.body;
+        const { amount, currency, walletAddress, network, transactionPin } = req.body;
 
         if (!amount || !currency || !walletAddress) {
             return res.status(400).json({

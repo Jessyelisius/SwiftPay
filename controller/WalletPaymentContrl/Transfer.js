@@ -40,7 +40,7 @@ const Transfer = async (req, res) => {
 
         await session.withTransaction(async () => {
 
-            const {amount: amt, narration: narrate, recipient: rcpt} = req.body;
+            const {amount: amt, narration: narrate, recipient: rcpt, transactionPin} = req.body;
 
             amount = Number(amt);// Ensure amount is a number
             narration = narrate || ''; // Ensure narration is a string

@@ -3,11 +3,8 @@ const {validationToken, verifyUserJwt} = require('../../middleware/jwtAuth');
 const { DepositWithCard, submitCardPIN, submitCardOTP, DepositWithVisualAccount } = require('../../controller/WalletPaymentContrl/Deposits');
 const Transfer = require('../../controller/WalletPaymentContrl/Transfer');
 const { getTransactionHistory, getSingleTransaction, getUserTransactionSummary } = require('../../controller/WalletPaymentContrl/transactionContr');
-// const { fetchUsdToNgnRate, fetchCryptoPrices, getRate } = require('../../controller/CryptoCoin/conversion');
-// const { getConversionQuote, processConversion, getConversionHistory, savePriceHistory } = require('../../controller/CryptoCoin/conversionService');
-// const { getWallet, getBalance, addExternalWallet, getExternalWallet, createWallet } = require('../../controller/CryptoCoin/walletService');
-// const { validateWalletAddress, processCryptoWithdrawal, getWithdrawalHistory, checkWithdrawalStatus, calculateNetworkFee, supportedNetworks } = require('../../controller/CryptoCoin/cryptoTransferService');
-// Import crypto controllers
+const { pinLimiter, verifyTransactionPin } = require('../../middleware/verifyTransactionPin,');
+
 const {
     fetchUsdToNgnRate,
     getPrices,
@@ -30,15 +27,16 @@ const {
 } = require('../../controller/CryptoCoin/cryptoController');
 
 
+
 const router = express.Router();
 
 // Deposit routes
-router.post('/deposit', verifyUserJwt, DepositWithCard);
+router.post('/deposit', verifyUserJwt, pinLimiter, verifyTransactionPin, DepositWithCard);
 router.post('/card/pin', verifyUserJwt, submitCardPIN);
 router.post('/card/otp', verifyUserJwt, submitCardOTP);
 
 //bank transfer routes
-router.post('/bank_transfer', verifyUserJwt, Transfer);
+router.post('/bank_transfer', verifyUserJwt, pinLimiter, verifyTransactionPin, Transfer);
 // router.post('/depositwithvisualaccount', verifyUserJwt, DepositWithVisualAccount);
 
 
@@ -52,19 +50,19 @@ router.get('/summary', verifyUserJwt, getUserTransactionSummary);
 router.get('/ngnRate', verifyUserJwt, fetchUsdToNgnRate);
 router.get('/cryptoPrices', verifyUserJwt, getPrices);
 router.get('/quote', verifyUserJwt, getConversionQuote);
-router.post('/convert', verifyUserJwt, processConversion);
+router.post('/convert', verifyUserJwt, pinLimiter, verifyTransactionPin, processConversion);
 router.get('/conversion-history', verifyUserJwt, getConversionHistory);
 
 // Crypto wallet routes
 router.post('/wallet/create', verifyUserJwt, createWallet);
 router.get('/wallet/summary', verifyUserJwt, getWallet);
 router.get('/wallet/balance/:currency', verifyUserJwt, getBalance);
-router.post('/wallet/external/add', verifyUserJwt, addExternalWallet);
+router.post('/wallet/external/add', verifyUserJwt, pinLimiter, verifyTransactionPin, addExternalWallet);
 router.get('/wallet/external', verifyUserJwt, getExternalWallet);
 router.post('/wallet/external/validate', verifyUserJwt, validateWalletAddress);
 
 // Crypto withdrawal routes
-router.post('/withdraw', verifyUserJwt, processCryptoWithdrawal);
+router.post('/withdraw', verifyUserJwt, pinLimiter, verifyTransactionPin, processCryptoWithdrawal);
 router.get('/withdraw/history', verifyUserJwt, getWithdrawalHistory);
 router.get('/withdraw/status/:reference', verifyUserJwt, checkWithdrawalStatus);
 router.get('/networks/:currency', verifyUserJwt, supportedNetworks);
