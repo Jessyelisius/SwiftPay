@@ -21,9 +21,9 @@ const crypto = require('crypto');
 //   return `${ivToHex}:${encryptedToHex}:${cipher.getAuthTag().toString('hex')}`;
 // }
 
-
 function encryptKorapayPayload(encryptionKey, payload) {
   
+  encryptionKey = encryptionKey.replace(/^['"]|['"]$/g, '').trim();
   // Debug the key
   console.log('Encryption key:', encryptionKey);
   console.log('Key length:', encryptionKey?.length);
